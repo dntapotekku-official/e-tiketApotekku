@@ -450,6 +450,11 @@ tbody tr:hover { background: #FAFBFD; }
 .notif-item.unread { background: var(--brand-soft); margin: 0 -18px; padding: 12px 18px; }
 .nav .notif-count { background: #fff; color: var(--brand); border-radius: 99px; font-size: 11px; font-weight: 700; padding: 1px 7px; margin-left: auto; }
 .sla-note { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+/* ---------- Toggle lihat password ---------- */
+.pw-wrap { position: relative; }
+.pw-wrap input { padding-right: 44px; width: 100%; }
+.pw-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 17px; line-height: 1; color: var(--ink-3); padding: 4px 6px; border-radius: 6px; transition: transform .12s ease; }
+.pw-toggle:hover { transform: translateY(-50%) scale(1.15); }
 .scombo { vertical-align: middle; }
 .ticket-actions .scombo input, .toolbar .scombo input, td .scombo input { padding: 6px 28px 6px 10px; font-size: 12.5px; border-radius: 7px; }
 .scombo .combo-list { min-width: 100%; width: max-content; max-width: 320px; }
@@ -476,7 +481,7 @@ tbody tr:hover { background: #FAFBFD; }
     </div>
     <div class="field">
       <label for="loginPassword">Password</label>
-      <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+      <span class="pw-wrap"><input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password"><button type="button" class="pw-toggle" onclick="togglePw('loginPassword', this)" aria-label="Lihat password">👁️</button></span>
     </div>
     <button class="btn btn-blue btn-block" id="btnLogin">Masuk</button>
   </div>
@@ -899,6 +904,16 @@ async function markAllNotifsRead() {
   const upd = {};
   myNotifs().filter(n => !n.read).forEach(n => { upd[`notifications/${SESSION.user_id}/${n.id}/read`] = true; });
   if (Object.keys(upd).length) await Store.update(upd);
+}
+
+/* ---- Toggle lihat password ---- */
+function togglePw(id, btn) {
+  const input = document.getElementById(id);
+  if (!input) return;
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  btn.textContent = show ? '🙈' : '👁️';
+  btn.setAttribute('aria-label', show ? 'Sembunyikan password' : 'Lihat password');
 }
 
 /* ---- Tema terang/gelap ---- */
@@ -1654,7 +1669,7 @@ function renderAkun(m) {
         : `<div class="field"><label>Nama</label><input id="accName" value="${esc(SESSION.name)}"></div>`}
       <div class="field"><label>Username</label><input id="accUsername" value="${esc((DATA.users[SESSION.user_id] || {}).username || '')}" disabled></div>
       <div class="field"><label>Password baru (opsional)</label>
-        <input type="password" id="accPass" placeholder="Minimal 6 karakter, kosongkan jika tidak diubah"></div>
+        <span class="pw-wrap"><input type="password" id="accPass" placeholder="Minimal 6 karakter, kosongkan jika tidak diubah"><button type="button" class="pw-toggle" onclick="togglePw('accPass', this)" aria-label="Lihat password">👁️</button></span></div>
       <button class="btn btn-primary" onclick="saveAkun()">Simpan perubahan</button>
     </div></div>
     ${SESSION.role === 'admin' && isSuper() ? umPanelHtml() + sysPanelHtml() : ''}`;
@@ -1719,7 +1734,7 @@ function umPanelHtml() {
         <div class="field"><label for="umUsername">Username</label>
           <input id="umUsername" value="${esc(u.username || '')}" placeholder="huruf kecil tanpa spasi" autocomplete="off"></div>
         <div class="field"><label for="umPassword">Password</label>
-          <input type="password" id="umPassword" placeholder="Minimal 6 karakter" autocomplete="new-password">
+          <span class="pw-wrap"><input type="password" id="umPassword" placeholder="Minimal 6 karakter" autocomplete="new-password"><button type="button" class="pw-toggle" onclick="togglePw('umPassword', this)" aria-label="Lihat password">👁️</button></span>
           ${UM_EDIT_ID ? '<p class="hint">Kosongkan jika password tidak diubah.</p>' : ''}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-blue" onclick="umSave()">${UM_EDIT_ID ? 'Simpan perubahan' : '+ Tambah pengguna'}</button>
