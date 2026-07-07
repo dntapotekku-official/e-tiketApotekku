@@ -62,6 +62,8 @@ body {
 }
 
 h1, h2, h3 { font-family: var(--font-display); letter-spacing: -.01em; }
+input:not([type="checkbox"]):not([type="file"]), select, textarea { background: var(--surface); color: var(--ink); }
+::placeholder { color: var(--ink-3); opacity: 1; }
 
 a { color: var(--brand); text-decoration: none; }
 button { font-family: inherit; cursor: pointer; }
@@ -1825,7 +1827,8 @@ function sysPanelHtml() {
       <td>${esc(x.system_name)}</td>
       <td>${comboField('syspic-' + id, adminItems(true), x.pic || '', v => sysSetPic(id, v), 'Cari PIC...', 'width:180px')}</td>
       <td>${badge(x.status === 'inactive' ? 'b-cancelled' : 'b-done', x.status === 'inactive' ? 'Nonaktif' : 'Aktif')}</td>
-      <td style="text-align:right"><button class="btn btn-ghost btn-sm" onclick="sysToggle('${id}')">${x.status === 'inactive' ? 'Aktifkan' : 'Nonaktifkan'}</button></td>
+      <td style="text-align:right;white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="sysToggle('${id}')">${x.status === 'inactive' ? 'Aktifkan' : 'Nonaktifkan'}</button>
+        <button class="btn btn-danger btn-sm" onclick="sysDelete('${id}')">Hapus</button></td>
     </tr>`).join('');
   return `
     <div class="panel" style="max-width:640px">
@@ -1856,6 +1859,17 @@ async function sysToggle(id) {
   const to = x.status === 'inactive' ? 'active' : 'inactive';
   await Store.update({ [`systems/${id}/status`]: to });
   await logActivity('SYSTEM_STATUS_CHANGED', null, `Sistem ${x.system_name} ${to === 'active' ? 'diaktifkan' : 'dinonaktifkan'}`);
+  renderPage();
+}
+async function sysDelete(id) {
+  const x = DATA.systems[id]; if (!x) return;
+  const terkait = Object.values(DATA.tickets || {}).filter(t => t.system_id === id && !t.deleted_at).length;
+  const msg = terkait
+    ? `Hapus sistem "${x.system_name}"? Ada ${terkait} tiket terkait — riwayat tiket tetap aman (nama sistem tersimpan di tiket), tapi sistem ini tidak bisa dipilih lagi di form.`
+    : `Hapus sistem "${x.system_name}" dari daftar?`;
+  if (!confirm(msg)) return;
+  await Store.update({ ['systems/' + id]: null });
+  await logActivity('SYSTEM_DELETED', null, `Sistem ${x.system_name} dihapus dari daftar`);
   renderPage();
 }
 async function sysAdd() {
