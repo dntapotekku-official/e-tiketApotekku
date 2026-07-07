@@ -544,7 +544,7 @@ const firebaseConfig = {
 /* ============================================================
    DATA AWAL (seed) — dipakai saat database masih kosong
    ============================================================ */
-const SEED_VERSION = 7;
+const SEED_VERSION = 8;
 
 /* SHA-256 murni JavaScript (sinkron) — untuk hash password */
 function sha256(input) {
@@ -608,16 +608,16 @@ const LS = {
 
 const SEED = {
   users: {
-    user_hgpga: { uid: 'user_hgpga', name: 'Human Growth Performance & General Affairs', role: 'divisi', division_name: 'Human Growth Performance & General Affairs', username: 'hgpga', password_hash: '8c63dc5f912bb1aacc297bdf1848444e41de62c4a2d069ce36d72d511fbef250', created_at: 0, updated_at: 0 },
-    user_inventory: { uid: 'user_inventory', name: 'Inventory and Supplay Chain', role: 'divisi', division_name: 'Inventory and Supplay Chain', username: 'inventory', password_hash: 'cd63ef271f9f5c81c3ac9e24e544f7e982360ebc027bf4e6b6960485b13f89e7', created_at: 0, updated_at: 0 },
-    user_merchandiser: { uid: 'user_merchandiser', name: 'Merchandiser', role: 'divisi', division_name: 'Merchandiser', username: 'merchandiser', password_hash: '48aeb893c471adae43a7f88a0540cf8f51fe630741cb8886de7ddae3615a8209', created_at: 0, updated_at: 0 },
-    user_operational: { uid: 'user_operational', name: 'Operational & GPP Excellence', role: 'divisi', division_name: 'Operational & GPP Excellence', username: 'operational', password_hash: '10c3866e12f8006e3d413ba781e82876c3922619c3e1e97927ab1fbadff50e5c', created_at: 0, updated_at: 0 },
-    user_b2c: { uid: 'user_b2c', name: 'Business to Costumer, Online & Optimize Process', role: 'divisi', division_name: 'Business to Costumer, Online & Optimize Process', username: 'b2c', password_hash: '7f441c59bf6eccc5d2fc70c1b5743c32d0da8d2b2e5f3976306a25a49ce7b5bd', created_at: 0, updated_at: 0 },
-    user_b2b: { uid: 'user_b2b', name: 'Business to Business and other income', role: 'divisi', division_name: 'Business to Business and other income', username: 'b2b', password_hash: '62547dd1a62f6e6fe9718256d0ca1ba06acae53b0f5f49e1f4cf54abbee8d6d4', created_at: 0, updated_at: 0 },
-    user_newstore: { uid: 'user_newstore', name: 'New Store Legal and Regulations', role: 'divisi', division_name: 'New Store Legal and Regulations', username: 'newstore', password_hash: 'ca0dac36e6196716907190925c7934afa67c047df75e1b5dcf363e85d4ba8bd3', created_at: 0, updated_at: 0 },
-    user_finance: { uid: 'user_finance', name: 'Tax, Finance & Accounting', role: 'divisi', division_name: 'Tax, Finance & Accounting', username: 'finance', password_hash: '48f7312924d74358e75294e3b3613f2319d99e944184b69550f528577ca082fb', created_at: 0, updated_at: 0 },
-    user_marketing: { uid: 'user_marketing', name: 'Marketing, Branding and Costumer Enggagment', role: 'divisi', division_name: 'Marketing, Branding and Costumer Enggagment', username: 'marketing', password_hash: '7d50137f0395e9a47a5daf16959dd68abef6370d3b837ec3be4fe9d869db46a3', created_at: 0, updated_at: 0 },
-    user_quality: { uid: 'user_quality', name: 'Quality Improvement and Compliance', role: 'divisi', division_name: 'Quality Improvement and Compliance', username: 'quality', password_hash: '0f840d7354d0873e3054340243d745a0670ca3da75acb727e75228afee529bbb', created_at: 0, updated_at: 0 },
+    user_hgpga: { uid: 'user_hgpga', name: 'Human Growth Performance & General Affairs', role: 'divisi', division_name: 'Human Growth Performance & General Affairs', username: 'hgpga', password_hash: '0d9a8b64f1632cb09080b6e301b59010443110849e8a7a5b5289147d55f8ab8e', created_at: 0, updated_at: 0 },
+    user_inventory: { uid: 'user_inventory', name: 'Inventory and Supplay Chain', role: 'divisi', division_name: 'Inventory and Supplay Chain', username: 'inventory', password_hash: '0d9a8b64f1632cb09080b6e301b59010443110849e8a7a5b5289147d55f8ab8e', created_at: 0, updated_at: 0 },
+    user_merchandiser: { uid: 'user_merchandiser', name: 'Merchandiser', role: 'divisi', division_name: 'Merchandiser', username: 'merchandiser', password_hash: '0d9a8b64f1632cb09080b6e301b59010443110849e8a7a5b5289147d55f8ab8e', created_at: 0, updated_at: 0 },
+    user_operational: { uid: 'user_operational', name: 'Operational & GPP Excellence', role: 'divisi', division_name: 'Operational & GPP Excellence', username: 'operational', password_hash: '0d9a8b64f1632cb09080b6e301b59010443110849e8a7a5b5289147d55f8ab8e', created_at: 0, updated_at: 0 },
+    user_b2c: { uid: 'user_b2c', name: 'Business to Costumer, Online & Optimize Process', role: 'divisi', division_name: 'Business to Costumer, Online & Optimize Process', username: 'b2c', password_hash: '0d9a8b64f1632cb09080b6e301b59010443110849e8a7a5b5289147d55f8ab8e', created_at: 0, updated_at: 0 },
+    user_b2b: { uid: 'user_b2b', name: 'Business to Business and other income', role: 'divisi', division_name: 'Business to Business and other income', username: 'b2b', password_hash: '0d9a8b64f1632cb09080b6e301b59010443110849e8a7a5b5289147d55f8ab8e', created_at: 0, updated_at: 0 },
+    user_newstore: { uid: 'user_newstore', name: 'New Store Legal and Regulations', role: 'divisi', division_name: 'New Store Legal and Regulations', username: 'newstore', password_hash: '0d9a8b64f1632cb09080b6e301b59010443110849e8a7a5b5289147d55f8ab8e', created_at: 0, updated_at: 0 },
+    user_finance: { uid: 'user_finance', name: 'Tax, Finance & Accounting', role: 'divisi', division_name: 'Tax, Finance & Accounting', username: 'finance', password_hash: '0d9a8b64f1632cb09080b6e301b59010443110849e8a7a5b5289147d55f8ab8e', created_at: 0, updated_at: 0 },
+    user_marketing: { uid: 'user_marketing', name: 'Marketing, Branding and Costumer Enggagment', role: 'divisi', division_name: 'Marketing, Branding and Costumer Enggagment', username: 'marketing', password_hash: '0d9a8b64f1632cb09080b6e301b59010443110849e8a7a5b5289147d55f8ab8e', created_at: 0, updated_at: 0 },
+    user_quality: { uid: 'user_quality', name: 'Quality Improvement and Compliance', role: 'divisi', division_name: 'Quality Improvement and Compliance', username: 'quality', password_hash: '0d9a8b64f1632cb09080b6e301b59010443110849e8a7a5b5289147d55f8ab8e', created_at: 0, updated_at: 0 },
     user_cahya: { uid: 'user_cahya', name: 'Cahya (Team Leader)', role: 'admin', division_name: 'IT', superadmin: true, username: 'cahya', password_hash: 'e6683ac871142eec15d4761ec15a8fdef5a19eb63840f5ff51e3a90881086338', created_at: 0, updated_at: 0 },
     user_agus: { uid: 'user_agus', name: 'Agus', role: 'admin', division_name: 'IT', username: 'agus', password_hash: '1baedd25059490937a8f7a52dbaf5a7c168bc49f5bac0d7bc48bd6b58a84a421', created_at: 0, updated_at: 0 },
     user_gede: { uid: 'user_gede', name: 'Gede', role: 'admin', division_name: 'IT', username: 'gede', password_hash: '7752967dc417e1ee5b813f26dc1fba26c3fa11cd4e9ffb74a3907ee90465ba70', created_at: 0, updated_at: 0 },
@@ -663,6 +663,7 @@ const LocalStore = {
     let data = this.read();
     if (!data) { data = JSON.parse(JSON.stringify(SEED)); data.seed_version = SEED_VERSION; LS.set(this.KEY, JSON.stringify(data)); }
     else if ((data.seed_version || 0) < SEED_VERSION) {
+      const prevVer = data.seed_version || 0;
       /* Migrasi kumulatif: sistem terbaru, akun divisi resmi, hash password */
       data.systems = JSON.parse(JSON.stringify(SEED.systems));
       for (const uid in data.users) {
@@ -680,6 +681,10 @@ const LocalStore = {
         const u = data.users[uid];
         if (u.password && !u.password_hash) u.password_hash = sha256(u.password);
         delete u.password;
+      }
+      /* v8: reset password seluruh akun divisi ke default 'apotekku' (admin & CEO tidak tersentuh) */
+      if ((prevVer || 0) < 8) {
+        for (const uid in data.users) if (data.users[uid].role === 'divisi') data.users[uid].password_hash = '0d9a8b64f1632cb09080b6e301b59010443110849e8a7a5b5289147d55f8ab8e';
       }
       data.seed_version = SEED_VERSION;
       LS.set(this.KEY, JSON.stringify(data));
@@ -733,6 +738,10 @@ const FirebaseStore = {
         for (const uid in SEED.users) if (!data.users[uid]) upd['users/' + uid] = SEED.users[uid];
         if (data.users.user_admin && !SEED.users.user_admin) upd['users/user_admin'] = null; /* v6 */
         if (data.users.user_cahya) upd['users/user_cahya/superadmin'] = true; /* v7 */
+        /* v8: reset password seluruh akun divisi ke default 'apotekku' */
+        if (((data.seed_version || 0)) < 8) {
+          for (const uid in (data.users || {})) if (data.users[uid].role === 'divisi') upd['users/' + uid + '/password_hash'] = '0d9a8b64f1632cb09080b6e301b59010443110849e8a7a5b5289147d55f8ab8e';
+        }
         await DB.ref('/').update(upd);
         return;
       }
