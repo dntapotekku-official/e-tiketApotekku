@@ -1,0 +1,7 @@
+node_modules/
+.firebase/
+firebase-debug.log
+*.log
+.DS_Store
+# JANGAN commit kunci service account
+service-account*.json
