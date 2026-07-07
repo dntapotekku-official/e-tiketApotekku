@@ -230,9 +230,10 @@ tbody tr:hover { background: #FAFBFD; }
 /* ---------- Kartu tiket (signature) ---------- */
 .ticket-card {
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: var(--shadow); margin-bottom: 16px; overflow: hidden;
-  display: grid; grid-template-columns: 150px 1fr;
+  box-shadow: var(--shadow); margin-bottom: 16px; overflow: visible; /* agar dropdown tidak terpotong */
+  display: grid; grid-template-columns: 150px 1fr; position: relative;
 }
+.ticket-stub { border-radius: calc(var(--radius) - 1px) 0 0 calc(var(--radius) - 1px); }
 .ticket-stub {
   background: var(--brand); color: #fff; padding: 18px 14px;
   display: flex; flex-direction: column; justify-content: space-between; gap: 12px;
@@ -308,7 +309,7 @@ tbody tr:hover { background: #FAFBFD; }
   .nav { flex-direction: row; flex-wrap: wrap; }
   .main { padding: 18px 14px; }
   .ticket-card { grid-template-columns: 1fr; }
-  .ticket-stub { flex-direction: row; align-items: center; border-right: none; border-bottom: 2px dashed rgba(255,255,255,.35); }
+  .ticket-stub { flex-direction: row; align-items: center; border-right: none; border-bottom: 2px dashed rgba(255,255,255,.35); border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0; }
   .ticket-stub::before { top: auto; bottom: -8px; left: -8px; right: auto; }
   .ticket-stub::after { bottom: -8px; right: -8px; }
   .table-scroll { overflow-x: auto; }
@@ -455,7 +456,9 @@ tbody tr:hover { background: #FAFBFD; }
 .pw-wrap input { padding-right: 44px; width: 100%; }
 .pw-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 17px; line-height: 1; color: var(--ink-3); padding: 4px 6px; border-radius: 6px; transition: transform .12s ease; }
 .pw-toggle:hover { transform: translateY(-50%) scale(1.15); }
-.scombo { vertical-align: middle; }
+.scombo { vertical-align: middle; position: relative; }
+.scombo:focus-within { z-index: 70; }
+.combo-list { z-index: 70; }
 .ticket-actions .scombo input, .toolbar .scombo input, td .scombo input { padding: 6px 28px 6px 10px; font-size: 12.5px; border-radius: 7px; }
 .scombo .combo-list { min-width: 100%; width: max-content; max-width: 320px; }
 
