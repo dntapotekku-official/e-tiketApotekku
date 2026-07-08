@@ -1618,19 +1618,23 @@ function comboVal(cid) {
   const el = document.querySelector(`.scombo[data-cid="${cid}"] input`);
   return el ? (el.dataset.selid || '') : '';
 }
-function scomboFilter(root) {
+function scomboFilter(root, showAll) {
   const reg = COMBOS[root.dataset.cid]; if (!reg) return;
   const input = root.querySelector('input');
   const list = root.querySelector('.combo-list');
-  const q = input.value.trim().toLowerCase();
+  /* Saat baru dibuka (showAll): tampilkan SEMUA opsi, jangan terfilter oleh nilai terpilih.
+     Penyaringan hanya berjalan ketika pengguna mengetik. */
+  const q = showAll ? '' : input.value.trim().toLowerCase();
   const items = q ? reg.items.filter(i => i.name.toLowerCase().includes(q)) : reg.items;
+  const selId = input.dataset.selid || '';
   list.innerHTML = items.length ? items.map(i => {
     let label = esc(i.name);
     if (q) {
       const at = i.name.toLowerCase().indexOf(q);
       if (at >= 0) label = esc(i.name.slice(0, at)) + '<b>' + esc(i.name.slice(at, at + q.length)) + '</b>' + esc(i.name.slice(at + q.length));
     }
-    return `<div class="combo-item" data-id="${esc(String(i.id))}" data-name="${esc(i.name)}">${label}</div>`;
+    const cur = String(i.id) === selId ? ' hl' : '';
+    return `<div class="combo-item${cur}" data-id="${esc(String(i.id))}" data-name="${esc(i.name)}">${label}</div>`;
   }).join('') : '<div class="combo-empty">Tidak ditemukan.</div>';
   list.hidden = false;
 }
@@ -1644,7 +1648,7 @@ function scomboPick(root, id, name) {
 }
 document.addEventListener('focusin', e => {
   const r = e.target.closest('.scombo');
-  if (r && e.target.tagName === 'INPUT') { e.target.select(); scomboFilter(r); }
+  if (r && e.target.tagName === 'INPUT') { e.target.select(); scomboFilter(r, true); }
 });
 document.addEventListener('input', e => {
   const r = e.target.closest('.scombo');
