@@ -795,6 +795,19 @@ let PAGE_ANIM = true;
 
 const SESSION_KEY = 'etiket_session';
 const THEME_KEY = 'etiket_theme';
+
+/* ---- Routing URL: setiap menu punya path sendiri (/dashboard, /tiket, ...) ---- */
+const PAGE_SLUG = { dashboard: 'dashboard', tiket: 'tiket', monitoring: 'monitoring', notif: 'notifikasi', akun: 'akun' };
+const SLUG_PAGE = Object.fromEntries(Object.entries(PAGE_SLUG).map(([k, v]) => [v, k]));
+const BASE = location.pathname.replace(/[^/]*$/, '');
+let PENDING_PAGE = null;
+function syncUrl(page, replace) {
+  try {
+    const url = BASE + (PAGE_SLUG[page] || '');
+    if (replace) history.replaceState({ page }, '', url);
+    else history.pushState({ page }, '', url);
+  } catch (e) { /* file:// atau lingkungan tanpa history API */ }
+}
 const PROGRESS_STEPS = ['Approve', 'Analisa', 'Proses', 'Testing', 'Release'];
 const STATUS_LABEL = { waiting: 'Menunggu', in_progress: 'Diproses', on_hold: 'Ditunda', done: 'Selesai', rejected: 'Ditolak', cancelled: 'Dibatalkan' };
 const STATUS_BADGE = { waiting: 'b-waiting', in_progress: 'b-active', on_hold: 'b-hold', done: 'b-done', rejected: 'b-rejected', cancelled: 'b-cancelled' };
@@ -944,7 +957,11 @@ function toggleTheme() {
 /* ---- Sesi ---- */
 function getSession() { try { return JSON.parse(LS.get(SESSION_KEY)); } catch (e) { return null; } }
 function saveSession(s) { LS.set(SESSION_KEY, JSON.stringify(s)); }
-function doLogout() { LS.del(SESSION_KEY); SESSION = null; renderRoot(); }
+function doLogout() {
+  LS.del(SESSION_KEY); SESSION = null;
+  try { history.replaceState(null, '', BASE); } catch (e) {}
+  renderRoot();
+}
 
 /* ---- Login username + password (dibandingkan sebagai hash SHA-256) ---- */
 function checkPassword(u, password) {
@@ -969,9 +986,11 @@ function tryLogin() {
   SESSION = { user_id: found.user_id, name: found.name, role: found.role, division_name: found.division_name || found.name };
   saveSession(SESSION);
   document.getElementById('loginPassword').value = '';
-  ACTIVE_PAGE = 'dashboard';
+  ACTIVE_PAGE = PENDING_PAGE || 'dashboard';
+  PENDING_PAGE = null;
   PAGE_ANIM = true;
   renderRoot();
+  syncUrl(ACTIVE_PAGE, true);
 }
 document.getElementById('btnLogin').addEventListener('click', tryLogin);
 document.getElementById('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
@@ -986,6 +1005,7 @@ function renderRoot() {
   SESSION.name = u.name; SESSION.division_name = u.division_name || u.name; SESSION.superadmin = !!u.superadmin;
   login.hidden = true; app.hidden = false;
   renderNav(); renderPage();
+  if (!location.pathname.slice(BASE.length)) syncUrl(ACTIVE_PAGE, true);
   window.scrollTo(0, 0);
 }
 function renderNav() {
@@ -1002,7 +1022,13 @@ function renderNav() {
     menus.map(([k, l]) => `<button data-page="${k}" class="${k === ACTIVE_PAGE ? 'active' : ''}" onclick="goPage('${k}')">${l}</button>`).join('') +
     `<button class="logout-btn" onclick="doLogout()">⏻ Logout</button>`;
 }
-function goPage(p) { ACTIVE_PAGE = p; PAGE_ANIM = true; renderNav(); renderPage(); window.scrollTo(0, 0); }
+function goPage(p) {
+  const changed = ACTIVE_PAGE !== p;
+  ACTIVE_PAGE = p; PAGE_ANIM = true;
+  renderNav(); renderPage();
+  syncUrl(p, !changed);
+  window.scrollTo(0, 0);
+}
 function renderPage() {
   const m = document.getElementById('mainContent');
   m.classList.toggle('page-anim', PAGE_ANIM);
@@ -1888,7 +1914,20 @@ if (!USE_FIREBASE) {
   document.getElementById('demoBanner').hidden = false;
 }
 applyTheme(getTheme());
+try {
+  const qp = new URLSearchParams(location.search).get('p');
+  if (qp) history.replaceState(null, '', BASE + qp.replace(/^\/+/, ''));
+  const slug = location.pathname.slice(BASE.length).replace(/\/+$/, '');
+  if (SLUG_PAGE[slug]) PENDING_PAGE = SLUG_PAGE[slug];
+} catch (e) {}
+window.addEventListener('popstate', () => {
+  if (!SESSION) return;
+  const slug = location.pathname.slice(BASE.length).replace(/\/+$/, '');
+  ACTIVE_PAGE = SLUG_PAGE[slug] || 'dashboard';
+  PAGE_ANIM = true; renderNav(); renderPage();
+});
 SESSION = getSession();
+if (SESSION && PENDING_PAGE) { ACTIVE_PAGE = PENDING_PAGE; PENDING_PAGE = null; }
 Store.init(data => {
   DATA = data || DATA;
   if (!DATA.comments) DATA.comments = {};

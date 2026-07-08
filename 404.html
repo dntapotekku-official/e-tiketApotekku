@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>E-Tiket ApotekKU</title>
+<script>
+  // Pengalih SPA GitHub Pages: /tiket → /?p=tiket → aplikasi memulihkan halaman.
+  (function () {
+    var segs = location.hostname.endsWith('github.io') ? 1 : 0; // github.io: simpan nama repo
+    var parts = location.pathname.split('/').filter(Boolean);
+    var base = '/' + parts.slice(0, segs).join('/');
+    if (base !== '/') base += '/';
+    var rest = parts.slice(segs).join('/');
+    location.replace(base + '?p=' + encodeURIComponent(rest) + location.hash);
+  })();
+</script>
+</head>
+<body></body>
+</html>
