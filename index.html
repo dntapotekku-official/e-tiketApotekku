@@ -330,12 +330,12 @@ tbody tr:hover { background: #FAFBFD; }
 @keyframes bellRing { 0%, 100% { transform: none; } 20% { transform: rotate(12deg); } 40% { transform: rotate(-10deg); } 60% { transform: rotate(6deg); } 80% { transform: rotate(-4deg); } }
 
 .login-card { animation: scaleIn .4s cubic-bezier(.22, 1, .36, 1) both; }
-.page-anim > * { animation: fadeUp .38s cubic-bezier(.22, 1, .36, 1) both; }
+.page-anim > * { animation: fadeUp .38s cubic-bezier(.22, 1, .36, 1) backwards; }
 .page-anim > *:nth-child(2) { animation-delay: .05s; }
 .page-anim > *:nth-child(3) { animation-delay: .1s; }
 .page-anim > *:nth-child(4) { animation-delay: .15s; }
 .page-anim > *:nth-child(5) { animation-delay: .2s; }
-.page-anim .stat-grid .stat { animation: fadeUp .4s cubic-bezier(.22, 1, .36, 1) both; }
+.page-anim .stat-grid .stat { animation: fadeUp .4s cubic-bezier(.22, 1, .36, 1) backwards; }
 .page-anim .stat-grid .stat:nth-child(1) { animation-delay: .05s; }
 .page-anim .stat-grid .stat:nth-child(2) { animation-delay: .1s; }
 .page-anim .stat-grid .stat:nth-child(3) { animation-delay: .15s; }
@@ -464,6 +464,10 @@ tbody tr:hover { background: #FAFBFD; }
 .scombo { vertical-align: middle; position: relative; }
 .scombo:focus-within { z-index: 70; }
 .combo-list { z-index: 70; }
+/* Blok (header filter / kartu tiket / panel) yang berisi dropdown terbuka menang di atas blok lain */
+.page-head { position: relative; z-index: 20; }
+#mainContent > *:has(.combo-list:not([hidden])) { position: relative; z-index: 40; }
+.panel-body:has(.combo-list:not([hidden])) { position: relative; z-index: 40; }
 .ticket-actions .scombo input, .toolbar .scombo input, td .scombo input { padding: 6px 28px 6px 10px; font-size: 12.5px; border-radius: 7px; }
 .scombo .combo-list { min-width: 100%; width: max-content; max-width: 320px; }
 
