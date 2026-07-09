@@ -1395,6 +1395,10 @@ function renderAdminTiket(m) {
         actions += ' ' + comboField('pic-' + t.ticket_id, adminItems(), t.assigned_to, v => reassign(t.ticket_id, v), 'Ganti PIC...', 'width:170px;display:inline-block');
       }
       else if (t.status === 'on_hold') actions = `<button class="btn btn-blue btn-sm" onclick="toggleHold('${t.ticket_id}')">▶ Lanjutkan</button>`;
+      if (isSuper() && ['in_progress', 'on_hold', 'done'].includes(t.status)) {
+        const atFirst = t.status !== 'done' && PROGRESS_STEPS.indexOf(t.current_progress) <= 0;
+        actions += ` <button class="btn btn-ghost btn-sm" onclick="rollbackProgress('${t.ticket_id}')">↩ ${t.status === 'done' ? 'Buka kembali' : atFirst ? 'Ke antrean' : 'Mundurkan'}</button>`;
+      }
       actions += ` <button class="btn btn-danger btn-sm" onclick="deleteTicket('${t.ticket_id}')">🗑 Hapus</button>`;
       const extra = `<div class="ticket-actions"><span class="toolbar">${t.status === 'waiting' ? sel : ''}</span>${actions} ${commentBlock(t)}</div>`;
       return ticketCard(t, qi >= 0 ? 'Antrean #' + (qi + 1) : '—', extra);
@@ -1513,6 +1517,38 @@ async function advanceProgress(id) {
     await notify([t.division_id], `→ Tiket ${t.ticket_number} masuk tahap ${next}.`, id);
   }
 }
+/* Mundurkan progress — khusus Super Admin (koreksi salah klik "Lanjut") */
+async function rollbackProgress(id) {
+  if (!isSuper()) return;
+  const t = DATA.tickets[id]; if (!t) return;
+  const idx = PROGRESS_STEPS.indexOf(t.current_progress);
+  let upd = { [`tickets/${id}/updated_at`]: NOW() };
+  let desc;
+  if (t.status === 'done') {
+    const prev = PROGRESS_STEPS[PROGRESS_STEPS.length - 2];
+    if (!confirm(`Buka kembali tiket ${t.ticket_number}? Status kembali ke Diproses, tahap ${prev}.`)) return;
+    upd[`tickets/${id}/status`] = 'in_progress';
+    upd[`tickets/${id}/current_progress`] = prev;
+    upd[`tickets/${id}/done_at`] = null;
+    desc = `Tiket ${t.ticket_number} dibuka kembali oleh Super Admin — mundur ke tahap ${prev}`;
+  } else if (idx > 0) {
+    const prev = PROGRESS_STEPS[idx - 1];
+    if (!confirm(`Mundurkan tiket ${t.ticket_number} dari ${t.current_progress} ke ${prev}?`)) return;
+    upd[`tickets/${id}/current_progress`] = prev;
+    upd[`tickets/${id}/status`] = 'in_progress';
+    desc = `Progress tiket ${t.ticket_number} dimundurkan Super Admin: ${t.current_progress} → ${prev}`;
+  } else {
+    if (!confirm(`Kembalikan tiket ${t.ticket_number} ke antrean Menunggu? PIC dan deadline tetap tersimpan.`)) return;
+    upd[`tickets/${id}/status`] = 'waiting';
+    upd[`tickets/${id}/current_progress`] = null;
+    upd[`tickets/${id}/done_at`] = null;
+    desc = `Tiket ${t.ticket_number} dikembalikan ke antrean oleh Super Admin`;
+  }
+  await Store.update(upd);
+  await logActivity('PROGRESS_ROLLED_BACK', id, desc);
+  await notify([t.division_id, t.assigned_to], `↩ ${desc}`, id);
+}
+
 async function deleteTicket(id) {
   const t = DATA.tickets[id];
   if (!t || !confirm(`Hapus tiket ${t.ticket_number}? Nomor antrean tiket lain akan disesuaikan otomatis.`)) return;
