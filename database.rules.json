@@ -1,0 +1,30 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": true,
+    "tickets": {
+      ".indexOn": [
+        "division_id",
+        "status",
+        "queue_order",
+        "created_at"
+      ]
+    },
+    "ticket_progress": {
+      ".indexOn": [
+        "ticket_id"
+      ]
+    },
+    "activity_logs": {
+      ".indexOn": [
+        "created_at",
+        "ticket_id"
+      ]
+    },
+    "users": {
+      ".indexOn": [
+        "username"
+      ]
+    }
+  }
+}
