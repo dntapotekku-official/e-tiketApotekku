@@ -811,6 +811,7 @@ let OPEN_COMMENTS = {};
 let PENDING_ATTACH = [];
 let NOTIF_MARK_TIMER = null;
 let PAGE_ANIM = true;
+let ADMIN_FORM_OPEN = false;
 
 const SESSION_KEY = 'etiket_session';
 const THEME_KEY = 'etiket_theme';
@@ -1339,9 +1340,9 @@ async function ambilTiket() {
   }});
   await logActivity('TICKET_CREATED', id, `Tiket ${ticketNumber} dibuat untuk sistem ${systemName}${pic ? `, masuk antrian PIC ${pic.name}` : ''}`);
   await logActivity('AUTO_CLASSIFIED', id, `Tiket ${ticketNumber} diklasifikasi otomatis: ${PRIORITY_LABEL[priority]}`);
-  const generalTargets = pic ? superIds().filter(aid => aid !== pic.id) : adminUsers().map(([aid]) => aid);
+  const generalTargets = (pic ? superIds().filter(aid => aid !== pic.id) : adminUsers().map(([aid]) => aid)).filter(aid => aid !== SESSION.user_id);
   await notify(generalTargets, `🎫 Tiket baru ${ticketNumber} dari ${SESSION.division_name} (${PRIORITY_LABEL[priority]}): ${reqText.slice(0, 60)}`, id);
-  if (pic) await notify([pic.id], `🎯 Tiket baru di antrian Anda (${systemName}): ${ticketNumber} dari ${SESSION.division_name} (${PRIORITY_LABEL[priority]})`, id);
+  if (pic && pic.id !== SESSION.user_id) await notify([pic.id], `🎯 Tiket baru di antrian Anda (${systemName}): ${ticketNumber} dari ${SESSION.division_name} (${PRIORITY_LABEL[priority]})`, id);
   PENDING_ATTACH = [];
   SELECTED_SYS = null;
   renderPage();
@@ -1390,10 +1391,12 @@ function renderAdminTiket(m) {
   m.innerHTML = `
     <div class="page-head"><div><h1>${isSuper() ? 'Tiket — Semua Antrian' : 'Tiket — Antrian Saya'}</h1><p class="sub">${isSuper() ? 'Seluruh tiket semua PIC, terurut berdasarkan klasifikasi' : 'Tiket yang ditugaskan ke Anda + tiket tanpa PIC'}</p></div>
       <div class="toolbar">
+        <button class="btn btn-red btn-sm" onclick="ADMIN_FORM_OPEN = !ADMIN_FORM_OPEN; renderPage()">${ADMIN_FORM_OPEN ? '✕ Tutup form' : '➕ Buat Tiket'}</button>
         ${comboField('fStatus', [{ id: '', name: 'Semua status' }, ...Object.entries(STATUS_LABEL).map(([k, v]) => ({ id: k, name: v }))], FILTER_STATUS, v => { FILTER_STATUS = v; renderPage(); }, 'Semua status', 'width:170px')}
         ${isSuper() ? comboField('fPic', [{ id: '', name: 'Semua PIC' }, { id: SESSION.user_id, name: 'Saya — ' + SESSION.name }, ...adminItems().filter(i => i.id !== SESSION.user_id)], FILTER_ASSIGN, v => { FILTER_ASSIGN = v; renderPage(); }, 'Semua PIC', 'width:190px') : ''}
         <button class="btn btn-ghost btn-sm" onclick="exportExcel()">⬇ Ekspor Excel</button>
       </div></div>
+    ${ADMIN_FORM_OPEN ? adminTicketFormHtml() : ''}
     ${list.length ? list.map(t => {
       const qi = queue.findIndex(x => x.ticket_id === t.ticket_id);
       const p = effectivePriority(t);
@@ -1969,6 +1972,28 @@ async function sysAdd() {
   renderPage();
 }
 
+
+/* ---- Form buat tiket utk tim Admin IT ---- */
+function adminTicketFormHtml() {
+  return `
+    <div class="panel" style="margin-bottom:16px"><div class="panel-head"><h2>➕ Buat Tiket (tim IT)</h2></div>
+      <div class="panel-body">
+        <div class="field"><label>Sistem</label>
+          ${comboField('sysPick', SYSTEMS_LIST, SELECTED_SYS && SELECTED_SYS.id, onPickSystem, 'Ketik untuk mencari sistem...')}
+          <p class="hint" id="picInfo">Tiket akan tercatat atas nama divisi IT dan otomatis masuk antrian PIC sistem terpilih.</p></div>
+        <div class="field"><label for="reqText">Permintaan / pekerjaan</label>
+          <textarea id="reqText" rows="3" placeholder="cth: Refactor query laporan stok yang lambat di outlet besar"></textarea></div>
+        <div class="field"><label for="waNumber">Nomor WhatsApp (opsional)</label>
+          <input id="waNumber" inputmode="tel" placeholder="cth: 081234567890"></div>
+        <div class="field"><label for="attachInput">Lampiran (opsional)</label>
+          <input type="file" id="attachInput" accept="image/*" multiple onchange="onAttachChange(this)">
+          <div id="attachList" class="attach-list"></div>
+          <p class="hint">Maks 2 gambar, masing-masing ≤ 400 KB.</p></div>
+        <div id="formAlert" class="alert"></div>
+        <button class="btn btn-red" onclick="ambilTiket()">🎫 Ambil Tiket Antrian</button>
+      </div>
+    </div>`;
+}
 
 /* ================= PUSH NOTIFICATION (PWA + FCM) ================= */
 const DEVICE_KEY = 'etiket_device_id';
