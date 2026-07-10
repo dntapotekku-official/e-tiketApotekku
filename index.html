@@ -677,6 +677,9 @@ const SEED = {
    ADAPTER PENYIMPANAN — localStorage (demo) atau Firebase RTDB
    API: Store.init(cb) / Store.update(map) / Store.pushKey() / Store.increment(path)
    ============================================================ */
+/* Web Push certificate (VAPID public key) — dari Firebase console → Cloud Messaging */
+const VAPID_PUBLIC_KEY = "BMrDCYuvNh5N4qaP5V1GGzgPXMhzbN9Ax1UzG_YlrWLDItjPoBorrhGsPsg-oUFznDJlD7qzcYKmbm8Ig4v33G4";
+
 const USE_FIREBASE = !!firebaseConfig.apiKey;
 let DB = null;
 
