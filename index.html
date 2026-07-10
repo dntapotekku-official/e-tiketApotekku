@@ -1283,9 +1283,7 @@ function renderDivisiDash(m) {
 }
 function renderDivisiTiket(m) {
   const list = myTickets();
-  SYSTEMS_LIST = Object.entries(DATA.systems || {})
-    .filter(([, s]) => s.status !== 'inactive')
-    .map(([id, s]) => ({ id, name: s.system_name }));
+  refreshSystemsList();
   m.innerHTML = `
     <div class="page-head"><div><h1>Tiket</h1><p class="sub">Ambil tiket baru dan pantau status tiket Anda</p></div></div>
     <div class="panel"><div class="panel-head"><h2>Form pengambilan tiket</h2></div>
@@ -1977,7 +1975,15 @@ async function sysAdd() {
 
 
 /* ---- Form buat tiket utk tim Admin IT ---- */
+function refreshSystemsList() {
+  SYSTEMS_LIST = Object.entries(DATA.systems || {})
+    .filter(([, x]) => x.status !== 'inactive')
+    .map(([id, x]) => ({ id, name: x.system_name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function adminTicketFormHtml() {
+  refreshSystemsList(); /* fix: daftar sistem kosong di form admin */
   return `
     <div class="panel" style="margin-bottom:16px"><div class="panel-head"><h2>➕ Buat Tiket (tim IT)</h2></div>
       <div class="panel-body">
