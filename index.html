@@ -2116,8 +2116,7 @@ async function enableNotif() {
     renderPage();
   } catch (e) {
     console.error('[Push] subscribe() failed:', e && e.name, e && e.message, e);
-    alert('Aktivasi gagal: ' + ((e && e.message) || e) + '
-Coba muat ulang halaman lalu ulangi.');
+    alert('Aktivasi gagal: ' + ((e && e.message) || e) + '\nCoba muat ulang halaman lalu ulangi.');
     renderPage();
   }
 }
