@@ -570,7 +570,8 @@ const firebaseConfig = {
   projectId: "e-tiket-apotekku",
   storageBucket: "e-tiket-apotekku.firebasestorage.app",
   messagingSenderId: "720049923390",
-  appId: "1:720049923390:web:f2ab82f2ee60b18e19f86f"
+  appId: "1:720049923390:web:f2ab82f2ee60b18e19f86f",
+  measurementId: "G-XP2G07G6S1"
 };
 
 /* ============================================================
@@ -678,7 +679,7 @@ const SEED = {
    API: Store.init(cb) / Store.update(map) / Store.pushKey() / Store.increment(path)
    ============================================================ */
 /* Web Push certificate (VAPID public key) — dari Firebase console → Cloud Messaging */
-const VAPID_PUBLIC_KEY = "BMrDCYuvNh5N4qaP5V1GGzgPXMhzbN9Ax1UzG_YlrWLDItjPoBorrhGsPsg-oUFznDJlD7qzcYKmbm8Ig4v33G4";
+const VAPID_PUBLIC_KEY = "BK4crNFYwJ1cRBu4xohu-2D8EyQOXb2NR0fqPorqm7RyqelpKxP6fC4F42wRNcqqeVx3R3_xGYSISMfalkYALPA";
 
 const USE_FIREBASE = !!firebaseConfig.apiKey;
 let DB = null;
@@ -2021,12 +2022,13 @@ function pushSupported() {
 async function registerSW() {
   if (!('serviceWorker' in navigator)) return null;
   try {
-    SW_REG = await navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './' });
+    SW_REG = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    console.log('[Push] Service worker terdaftar:', SW_REG.scope);
     navigator.serviceWorker.addEventListener('message', (e) => {
       if (e.data && e.data.type === 'OPEN_TICKET' && e.data.ticket_id) focusTicketById(e.data.ticket_id);
     });
     return SW_REG;
-  } catch (e) { console.warn('SW gagal register:', e); return null; }
+  } catch (e) { console.error('[Push] Service worker GAGAL register:', e); return null; }
 }
 
 /* ---- Bel "cling": pakai assets/bell.mp3 bila ada, fallback sintesis WebAudio ---- */
@@ -2077,15 +2079,19 @@ function pushPanelHtml() {
   </div></div>`;
 }
 async function enableNotif() {
+  console.log('[Push] apiKey terisi:', !!firebaseConfig.apiKey, '| VAPID terisi:', !!VAPID_PUBLIC_KEY && !VAPID_PUBLIC_KEY.startsWith('GANTI_'));
   if (!pushSupported() || VAPID_PUBLIC_KEY.startsWith('GANTI_')) { renderPage(); return; }
   try {
     const perm = await Notification.requestPermission();
+    console.log('[Push] Notification.permission:', perm);
     if (perm !== 'granted') { renderPage(); return; }
     const reg = SW_REG || await registerSW();
     if (!reg) throw new Error('service worker tidak tersedia');
+    await navigator.serviceWorker.ready;
     const messaging = firebase.messaging();
     const token = await messaging.getToken({ vapidKey: VAPID_PUBLIC_KEY, serviceWorkerRegistration: reg });
     if (!token) throw new Error('token kosong');
+    console.log('[Push] Token FCM berhasil dibuat:', token.slice(0, 14) + '...');
     const me = DATA.users[SESSION.user_id] || {};
     const username = me.username || SESSION.user_id;
     await Store.update({ [`notification_subscriptions/${username}/${deviceId()}`]: {
@@ -2097,7 +2103,7 @@ async function enableNotif() {
     await logActivity('PUSH_SUBSCRIBED', null, `${SESSION.name} mengaktifkan push notification`);
     renderPage();
   } catch (e) {
-    console.warn('enableNotif gagal:', e);
+    console.error('[Push] getToken GAGAL — kode:', e && e.code, '| pesan lengkap:', e);
     alert('Token gagal dibuat: ' + (e.message || e) + '\nCoba muat ulang halaman lalu ulangi.');
     renderPage();
   }

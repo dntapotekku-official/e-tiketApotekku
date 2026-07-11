@@ -1,6 +1,6 @@
 /* ============================================================
    Service Worker — E-Tiket ApotekKU
-   Push notification background (Firebase Cloud Messaging)
+   Push notification background (Firebase Cloud Messaging) — v2
    ============================================================ */
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js');
@@ -12,7 +12,8 @@ firebase.initializeApp({
   projectId: "e-tiket-apotekku",
   storageBucket: "e-tiket-apotekku.firebasestorage.app",
   messagingSenderId: "720049923390",
-  appId: "1:720049923390:web:f2ab82f2ee60b18e19f86f"
+  appId: "1:720049923390:web:f2ab82f2ee60b18e19f86f",
+  measurementId: "G-XP2G07G6S1"
 });
 
 const messaging = firebase.messaging();
