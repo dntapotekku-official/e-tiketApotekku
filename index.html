@@ -553,7 +553,6 @@ tbody tr:hover { background: #FAFBFD; }
 
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 /* ============================================================
@@ -679,7 +678,7 @@ const SEED = {
    API: Store.init(cb) / Store.update(map) / Store.pushKey() / Store.increment(path)
    ============================================================ */
 /* Web Push certificate (VAPID public key) — dari Firebase console → Cloud Messaging */
-const VAPID_PUBLIC_KEY = "BK4crNFYwJ1cRBu4xohu-2D8EyQOXb2NR0fqPorqm7RyqelpKxP6fC4F42wRNcqqeVx3R3_xGYSISMfalkYALPA";
+const VAPID_PUBLIC_KEY = "BJCiFEjLOGCwQ5iQAMQGP13tub1vsQy98b-qWsqnp9T9C08e9WdY11tQpRDe6xYVi_1tBB-9bOpNMbCzkMHxCMs";
 
 const USE_FIREBASE = !!firebaseConfig.apiKey;
 let DB = null;
@@ -2016,19 +2015,26 @@ function deviceId() {
   return id;
 }
 function pushSupported() {
-  return USE_FIREBASE && 'serviceWorker' in navigator && 'Notification' in window && 'PushManager' in window
-    && typeof firebase !== 'undefined' && !!firebase.messaging;
+  return USE_FIREBASE && 'serviceWorker' in navigator && 'Notification' in window && 'PushManager' in window;
+}
+function urlBase64ToUint8Array(base64) {
+  const padding = '='.repeat((4 - base64.length % 4) % 4);
+  const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(b64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
 }
 async function registerSW() {
   if (!('serviceWorker' in navigator)) return null;
   try {
-    SW_REG = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-    console.log('[Push] Service worker terdaftar:', SW_REG.scope);
+    SW_REG = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+    console.log('[Push] Service worker registered:', SW_REG.scope);
     navigator.serviceWorker.addEventListener('message', (e) => {
-      if (e.data && e.data.type === 'OPEN_TICKET' && e.data.ticket_id) focusTicketById(e.data.ticket_id);
+      const d = e.data || {};
+      if (d.type === 'OPEN_TICKET' && d.ticket_id) focusTicketById(d.ticket_id);
+      if (d.type === 'PUSH_RECEIVED') { playBell(); showPushToast(d.title || 'Tiket Baru', d.body || '', d.ticket_id || ''); }
     });
     return SW_REG;
-  } catch (e) { console.error('[Push] Service worker GAGAL register:', e); return null; }
+  } catch (e) { console.error('[Push] Service worker register failed:', e); return null; }
 }
 
 /* ---- Bel "cling": pakai assets/bell.mp3 bila ada, fallback sintesis WebAudio ---- */
@@ -2079,35 +2085,43 @@ function pushPanelHtml() {
   </div></div>`;
 }
 async function enableNotif() {
-  console.log('[Push] apiKey terisi:', !!firebaseConfig.apiKey, '| VAPID terisi:', !!VAPID_PUBLIC_KEY && !VAPID_PUBLIC_KEY.startsWith('GANTI_'));
-  if (!pushSupported() || VAPID_PUBLIC_KEY.startsWith('GANTI_')) { renderPage(); return; }
+  const supported = pushSupported();
+  console.log('[Push] Web Push supported:', supported);
+  if (!supported || VAPID_PUBLIC_KEY.startsWith('GANTI_')) { renderPage(); return; }
   try {
     const perm = await Notification.requestPermission();
-    console.log('[Push] Notification.permission:', perm);
+    console.log('[Push] Notification permission:', perm);
     if (perm !== 'granted') { renderPage(); return; }
     const reg = SW_REG || await registerSW();
     if (!reg) throw new Error('service worker tidak tersedia');
-    await navigator.serviceWorker.ready;
-    const messaging = firebase.messaging();
-    const token = await messaging.getToken({ vapidKey: VAPID_PUBLIC_KEY, serviceWorkerRegistration: reg });
-    if (!token) throw new Error('token kosong');
-    console.log('[Push] Token FCM berhasil dibuat:', token.slice(0, 14) + '...');
+    const readyReg = await navigator.serviceWorker.ready;
+    console.log('[Push] Service worker ready:', readyReg.scope);
+    const subscription = await readyReg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    const sub = JSON.parse(JSON.stringify(subscription));
+    console.log('[Push] subscribe() success — endpoint:', String(sub.endpoint).slice(0, 60) + '...');
     const me = DATA.users[SESSION.user_id] || {};
     const username = me.username || SESSION.user_id;
-    await Store.update({ [`notification_subscriptions/${username}/${deviceId()}`]: {
+    await Store.update({ ['notification_subscriptions/' + username + '/' + deviceId()]: {
       username, role: SESSION.role, division_id: SESSION.user_id,
-      token, userAgent: navigator.userAgent.slice(0, 160),
-      created_at: NOW(), updated_at: NOW(), active: true
+      subscription: sub,
+      userAgent: navigator.userAgent.slice(0, 160),
+      created_at: NOW(), updated_at: NOW(), active: true,
+      method: 'web_push'
     }});
     LS.set('etiket_push_on', '1');
-    await logActivity('PUSH_SUBSCRIBED', null, `${SESSION.name} mengaktifkan push notification`);
+    await logActivity('PUSH_SUBSCRIBED', null, SESSION.name + ' mengaktifkan push notification (web push)');
     renderPage();
   } catch (e) {
-    console.error('[Push] getToken GAGAL — kode:', e && e.code, '| pesan lengkap:', e);
-    alert('Token gagal dibuat: ' + (e.message || e) + '\nCoba muat ulang halaman lalu ulangi.');
+    console.error('[Push] subscribe() failed:', e && e.name, e && e.message, e);
+    alert('Aktivasi gagal: ' + ((e && e.message) || e) + '
+Coba muat ulang halaman lalu ulangi.');
     renderPage();
   }
 }
+
 async function disableNotif() {
   try {
     const me = DATA.users[SESSION.user_id] || {};
@@ -2119,23 +2133,7 @@ async function disableNotif() {
   renderPage();
 }
 
-/* ---- Foreground: notifikasi + bel saat halaman sedang terbuka ---- */
-function initForegroundPush() {
-  if (!pushSupported()) return;
-  try {
-    const messaging = firebase.messaging();
-    messaging.onMessage((payload) => {
-      const d = (payload && payload.data) || {};
-      const n = (payload && payload.notification) || {};
-      playBell();
-      showPushToast(n.title || d.title || 'Tiket Baru', n.body || d.body || '', d.ticket_id || '');
-      if (SW_REG) SW_REG.showNotification(n.title || d.title || 'Tiket Baru', {
-        body: n.body || d.body || '', icon: './icons/icon-192.png', badge: './icons/badge-72.png',
-        tag: 'etiket-' + (d.ticket_id || Date.now()), data: d
-      }).catch(() => {});
-    });
-  } catch (e) { /* messaging tak tersedia */ }
-}
+/* Foreground kini ditangani service worker via postMessage PUSH_RECEIVED */
 function showPushToast(title, body, ticketId) {
   const el = document.createElement('div');
   el.className = 'push-toast';
@@ -2192,7 +2190,7 @@ Store.init(data => {
     focusTicketById(t);
   }
 });
-registerSW().then(() => initForegroundPush());
+registerSW();
 
 </script>
 </body>
