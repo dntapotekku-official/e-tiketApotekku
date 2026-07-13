@@ -1,7 +1,7 @@
 /* ============================================================
    Cloud Functions - E-Tiket ApotekKU (v2, Web Push standar)
-   - Kirim push saat tiket baru dibuat -> ke admin/PIC
-   - Kirim push saat status/progress tiket berubah -> ke pengaju tiket
+   - Tiket baru: push ke admin/PIC, bukan ke pengaju.
+   - Status/progress berubah: push ke pengaju tiket.
    ============================================================ */
 const { onValueCreated, onValueUpdated } = require('firebase-functions/v2/database');
 const admin = require('firebase-admin');
@@ -37,15 +37,17 @@ function setupWebPush() {
   );
 }
 
-function getAdminTargetUsernames(users, ticket) {
+function getAdminTargetUsernames(users, ticket, excludeUserId) {
   const targetUsernames = new Set();
   const picUser = ticket.assigned_to && users[ticket.assigned_to] ? users[ticket.assigned_to] : null;
 
-  if (picUser && picUser.username) {
+  if (picUser && picUser.username && ticket.assigned_to !== excludeUserId) {
     targetUsernames.add(picUser.username);
   }
 
   for (const uid of Object.keys(users)) {
+    if (uid === excludeUserId) continue;
+
     const u = users[uid] || {};
     if (u.role !== 'admin' || !u.username) continue;
     if (u.superadmin || !picUser) {
@@ -168,7 +170,8 @@ exports.notifyNewTicket = onValueCreated(
 
     const db = admin.database();
     const users = (await db.ref('users').get()).val() || {};
-    const targetUsernames = getAdminTargetUsernames(users, t);
+    const requesterId = t.created_by || t.division_id || null;
+    const targetUsernames = getAdminTargetUsernames(users, t, requesterId);
     if (!targetUsernames.size) return;
 
     const subsRoot = (await db.ref('notification_subscriptions').get()).val() || {};
@@ -179,7 +182,7 @@ exports.notifyNewTicket = onValueCreated(
 
     const payload = JSON.stringify({
       title: `Tiket Baru: ${String(t.request_text || '').slice(0, 60) || t.ticket_number}`,
-      body: `${prio} • ${t.system_name || '-'} • dari ${t.division_name || '-'}`,
+      body: `${prio} - ${t.system_name || '-'} - dari ${t.division_name || '-'}`,
       ticket_id: String(ticketId),
       ticket_number: String(t.ticket_number || ''),
       priority: String(t.priority || ''),
@@ -219,7 +222,6 @@ exports.notifyTicketStatusChanged = onValueUpdated(
 
     const statusChanged = before.status !== after.status;
     const progressChanged = before.current_progress !== after.current_progress;
-
     if (!statusChanged && !progressChanged) return;
 
     setupWebPush();
@@ -231,24 +233,23 @@ exports.notifyTicketStatusChanged = onValueUpdated(
 
     const subsRoot = (await db.ref('notification_subscriptions').get()).val() || {};
     const targets = getTargets(subsRoot, targetUsernames);
-
     const targetUrl = `https://eticket.apotekku.com/?ticket_id=${encodeURIComponent(ticketId)}`;
 
     let title = `Update Tiket ${after.ticket_number}`;
-    let body = `${after.system_name || '-'} • ${after.division_name || '-'}`;
+    let body = `${after.system_name || '-'} - ${after.division_name || '-'}`;
     let eventType = 'ticket_updated';
 
     if (statusChanged) {
       const oldStatus = STATUS_LABEL[before.status] || before.status || 'Tidak diketahui';
       const newStatus = STATUS_LABEL[after.status] || after.status || 'Tidak diketahui';
       title = `Status Tiket ${after.ticket_number} Berubah`;
-      body = `${oldStatus} → ${newStatus} • ${after.system_name || '-'} • ${after.division_name || '-'}`;
+      body = `${oldStatus} -> ${newStatus} - ${after.system_name || '-'} - ${after.division_name || '-'}`;
       eventType = 'ticket_status_changed';
     } else if (progressChanged) {
       const oldProgress = before.current_progress || 'Belum dimulai';
       const newProgress = after.current_progress || 'Belum dimulai';
       title = `Progress Tiket ${after.ticket_number} Berubah`;
-      body = `${oldProgress} → ${newProgress} • ${after.system_name || '-'} • ${after.division_name || '-'}`;
+      body = `${oldProgress} -> ${newProgress} - ${after.system_name || '-'} - ${after.division_name || '-'}`;
       eventType = 'ticket_progress_changed';
     }
 
