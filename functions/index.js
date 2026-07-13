@@ -1,8 +1,7 @@
 /* ============================================================
    Cloud Functions - E-Tiket ApotekKU (v2, Web Push standar)
-   Kirim push saat tiket baru dibuat dan saat status tiket berubah.
-   Deploy: buat functions/.env dulu (lihat .env.example),
-   lalu: firebase deploy --only functions
+   - Kirim push saat tiket baru dibuat -> ke admin/PIC
+   - Kirim push saat status/progress tiket berubah -> ke pengaju tiket
    ============================================================ */
 const { onValueCreated, onValueUpdated } = require('firebase-functions/v2/database');
 const admin = require('firebase-admin');
@@ -38,7 +37,7 @@ function setupWebPush() {
   );
 }
 
-function getTargetUsernames(users, ticket) {
+function getAdminTargetUsernames(users, ticket) {
   const targetUsernames = new Set();
   const picUser = ticket.assigned_to && users[ticket.assigned_to] ? users[ticket.assigned_to] : null;
 
@@ -52,6 +51,17 @@ function getTargetUsernames(users, ticket) {
     if (u.superadmin || !picUser) {
       targetUsernames.add(u.username);
     }
+  }
+
+  return targetUsernames;
+}
+
+function getRequesterTargetUsernames(users, ticket) {
+  const targetUsernames = new Set();
+  const requesterUser = ticket.division_id && users[ticket.division_id] ? users[ticket.division_id] : null;
+
+  if (requesterUser && requesterUser.username) {
+    targetUsernames.add(requesterUser.username);
   }
 
   return targetUsernames;
@@ -158,7 +168,7 @@ exports.notifyNewTicket = onValueCreated(
 
     const db = admin.database();
     const users = (await db.ref('users').get()).val() || {};
-    const targetUsernames = getTargetUsernames(users, t);
+    const targetUsernames = getAdminTargetUsernames(users, t);
     if (!targetUsernames.size) return;
 
     const subsRoot = (await db.ref('notification_subscriptions').get()).val() || {};
@@ -177,6 +187,7 @@ exports.notifyNewTicket = onValueCreated(
       created_by: String(t.division_name || ''),
       assigned_pic: String(t.assigned_name || ''),
       target_url: targetUrl,
+      event_type: 'ticket_created',
     });
 
     await sendNotifications(
@@ -205,34 +216,57 @@ exports.notifyTicketStatusChanged = onValueUpdated(
     const ticketId = event.params.ticketId;
 
     if (!before || !after || !after.ticket_number) return;
-    if (before.status === after.status) return;
+
+    const statusChanged = before.status !== after.status;
+    const progressChanged = before.current_progress !== after.current_progress;
+
+    if (!statusChanged && !progressChanged) return;
 
     setupWebPush();
 
     const db = admin.database();
     const users = (await db.ref('users').get()).val() || {};
-    const targetUsernames = getTargetUsernames(users, after);
+    const targetUsernames = getRequesterTargetUsernames(users, after);
     if (!targetUsernames.size) return;
 
     const subsRoot = (await db.ref('notification_subscriptions').get()).val() || {};
     const targets = getTargets(subsRoot, targetUsernames);
 
-    const oldStatus = STATUS_LABEL[before.status] || before.status || 'Tidak diketahui';
-    const newStatus = STATUS_LABEL[after.status] || after.status || 'Tidak diketahui';
     const targetUrl = `https://eticket.apotekku.com/?ticket_id=${encodeURIComponent(ticketId)}`;
 
+    let title = `Update Tiket ${after.ticket_number}`;
+    let body = `${after.system_name || '-'} • ${after.division_name || '-'}`;
+    let eventType = 'ticket_updated';
+
+    if (statusChanged) {
+      const oldStatus = STATUS_LABEL[before.status] || before.status || 'Tidak diketahui';
+      const newStatus = STATUS_LABEL[after.status] || after.status || 'Tidak diketahui';
+      title = `Status Tiket ${after.ticket_number} Berubah`;
+      body = `${oldStatus} → ${newStatus} • ${after.system_name || '-'} • ${after.division_name || '-'}`;
+      eventType = 'ticket_status_changed';
+    } else if (progressChanged) {
+      const oldProgress = before.current_progress || 'Belum dimulai';
+      const newProgress = after.current_progress || 'Belum dimulai';
+      title = `Progress Tiket ${after.ticket_number} Berubah`;
+      body = `${oldProgress} → ${newProgress} • ${after.system_name || '-'} • ${after.division_name || '-'}`;
+      eventType = 'ticket_progress_changed';
+    }
+
     const payload = JSON.stringify({
-      title: `Status Tiket ${after.ticket_number} Berubah`,
-      body: `${oldStatus} → ${newStatus} • ${after.system_name || '-'} • ${after.division_name || '-'}`,
+      title,
+      body,
       ticket_id: String(ticketId),
       ticket_number: String(after.ticket_number || ''),
       status_before: String(before.status || ''),
       status_after: String(after.status || ''),
+      progress_before: String(before.current_progress || ''),
+      progress_after: String(after.current_progress || ''),
       priority: String(after.priority || ''),
       category: String(after.system_name || ''),
       created_by: String(after.division_name || ''),
       assigned_pic: String(after.assigned_name || ''),
       target_url: targetUrl,
+      event_type: eventType,
     });
 
     await sendNotifications(
@@ -242,11 +276,13 @@ exports.notifyTicketStatusChanged = onValueUpdated(
       targets,
       payload,
       {
-        event_type: 'ticket_status_changed',
+        event_type: eventType,
         status_before: before.status || '',
         status_after: after.status || '',
+        progress_before: before.current_progress || '',
+        progress_after: after.current_progress || '',
       },
-      `Status tiket ${after.ticket_number} berubah, tetapi tidak ada device aktif utk ${JSON.stringify([...targetUsernames])}`
+      `Update tiket ${after.ticket_number}: tidak ada device aktif utk ${JSON.stringify([...targetUsernames])}`
     );
   }
 );
