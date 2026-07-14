@@ -2166,10 +2166,24 @@ async function enableNotif() {
     if (!reg) throw new Error('service worker tidak tersedia');
     const readyReg = await navigator.serviceWorker.ready;
     console.log('[Push] Service worker ready:', readyReg.scope);
-    const subscription = await readyReg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-    });
+    let subscription;
+    try {
+      subscription = await readyReg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    } catch (subErr) {
+      /* Langganan lama dgn kunci berbeda (era FCM) → lepas dulu, daftar ulang */
+      console.warn('[Push] subscribe awal gagal:', subErr && subErr.name, '— cek langganan lama...');
+      const oldSub = await readyReg.pushManager.getSubscription();
+      if (!oldSub) throw subErr;
+      await oldSub.unsubscribe();
+      console.log('[Push] langganan lama dilepas, mendaftar ulang dengan kunci baru...');
+      subscription = await readyReg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
     const sub = JSON.parse(JSON.stringify(subscription));
     console.log('[Push] subscribe() success — endpoint:', String(sub.endpoint).slice(0, 60) + '...');
     const me = DATA.users[SESSION.user_id] || {};
