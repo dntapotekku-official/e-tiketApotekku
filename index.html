@@ -815,6 +815,11 @@ let PENDING_ATTACH = [];
 let NOTIF_MARK_TIMER = null;
 let PAGE_ANIM = true;
 let ADMIN_FORM_OPEN = false;
+let NOTIF_WATCH_READY = false;
+let NOTIF_WATCH_USER = '';
+let NOTIF_SEEN_IDS = new Set();
+const RECENT_LOCAL_ALERTS = new Map();
+const LOCAL_ALERT_DEDUPE_MS = 7000;
 
 const SESSION_KEY = 'etiket_session';
 const THEME_KEY = 'etiket_theme';
@@ -949,6 +954,54 @@ async function markAllNotifsRead() {
   myNotifs().filter(n => !n.read).forEach(n => { upd[`notifications/${SESSION.user_id}/${n.id}/read`] = true; });
   if (Object.keys(upd).length) await Store.update(upd);
 }
+function localAlertKey(title, body, ticketId) {
+  return [ticketId || '', title || '', body || ''].join('|').slice(0, 300);
+}
+function fireLocalAlert(title, body, ticketId, key) {
+  const now = Date.now();
+  for (const [k, ts] of RECENT_LOCAL_ALERTS) {
+    if (now - ts > LOCAL_ALERT_DEDUPE_MS) RECENT_LOCAL_ALERTS.delete(k);
+  }
+
+  const alertKey = key || localAlertKey(title, body, ticketId);
+  if (RECENT_LOCAL_ALERTS.has(alertKey) && now - RECENT_LOCAL_ALERTS.get(alertKey) < LOCAL_ALERT_DEDUPE_MS) return;
+  RECENT_LOCAL_ALERTS.set(alertKey, now);
+
+  playBell();
+  showPushToast(title || 'Notifikasi Tiket', body || '', ticketId || '');
+}
+function watchInAppNotifications(data) {
+  if (!SESSION || !data || !data.notifications) {
+    NOTIF_WATCH_READY = false;
+    NOTIF_WATCH_USER = '';
+    NOTIF_SEEN_IDS = new Set();
+    return;
+  }
+
+  const userId = SESSION.user_id;
+  const rows = data.notifications[userId] || {};
+  const ids = Object.keys(rows);
+
+  if (!NOTIF_WATCH_READY || NOTIF_WATCH_USER !== userId) {
+    NOTIF_WATCH_USER = userId;
+    NOTIF_SEEN_IDS = new Set(ids);
+    NOTIF_WATCH_READY = true;
+    return;
+  }
+
+  const fresh = [];
+  ids.forEach(id => {
+    if (!NOTIF_SEEN_IDS.has(id)) {
+      NOTIF_SEEN_IDS.add(id);
+      const n = rows[id] || {};
+      if (!n.read) fresh.push({ id, ...n });
+    }
+  });
+
+  fresh
+    .sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
+    .forEach(n => fireLocalAlert('Notifikasi Tiket', n.text || '', n.ticket_id || '', `inapp:${n.id}`));
+}
 
 /* ---- Toggle lihat password ---- */
 function togglePw(id, btn) {
@@ -982,6 +1035,9 @@ function getSession() { try { return JSON.parse(LS.get(SESSION_KEY)); } catch (e
 function saveSession(s) { LS.set(SESSION_KEY, JSON.stringify(s)); }
 function doLogout() {
   LS.del(SESSION_KEY); SESSION = null;
+  NOTIF_WATCH_READY = false;
+  NOTIF_WATCH_USER = '';
+  NOTIF_SEEN_IDS = new Set();
   try { history.replaceState(null, '', BASE); } catch (e) {}
   renderRoot();
 }
@@ -1008,6 +1064,8 @@ function tryLogin() {
   }
   SESSION = { user_id: found.user_id, name: found.name, role: found.role, division_name: found.division_name || found.name };
   saveSession(SESSION);
+  NOTIF_WATCH_READY = false;
+  watchInAppNotifications(DATA);
   document.getElementById('loginPassword').value = '';
   ACTIVE_PAGE = PENDING_PAGE || 'dashboard';
   PENDING_PAGE = null;
@@ -2031,7 +2089,14 @@ async function registerSW() {
     navigator.serviceWorker.addEventListener('message', (e) => {
       const d = e.data || {};
       if (d.type === 'OPEN_TICKET' && d.ticket_id) focusTicketById(d.ticket_id);
-      if (d.type === 'PUSH_RECEIVED') { playBell(); showPushToast(d.title || 'Tiket Baru', d.body || '', d.ticket_id || ''); }
+      if (d.type === 'PUSH_RECEIVED') {
+        fireLocalAlert(
+          d.title || 'Tiket Baru',
+          d.body || '',
+          d.ticket_id || '',
+          localAlertKey(d.title || 'Tiket Baru', d.body || '', d.ticket_id || '')
+        );
+      }
     });
     return SW_REG;
   } catch (e) { console.error('[Push] Service worker register failed:', e); return null; }
@@ -2180,6 +2245,7 @@ window.addEventListener('popstate', () => {
 SESSION = getSession();
 if (SESSION && PENDING_PAGE) { ACTIVE_PAGE = PENDING_PAGE; PENDING_PAGE = null; }
 Store.init(data => {
+  watchInAppNotifications(data);
   DATA = data || DATA;
   if (!DATA.comments) DATA.comments = {};
   if (!DATA.notifications) DATA.notifications = {};
