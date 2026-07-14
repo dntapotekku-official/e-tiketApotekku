@@ -2094,14 +2094,6 @@ async function registerSW() {
     navigator.serviceWorker.addEventListener('message', (e) => {
       const d = e.data || {};
       if (d.type === 'OPEN_TICKET' && d.ticket_id) focusTicketById(d.ticket_id);
-      if (d.type === 'PUSH_RECEIVED') {
-        fireLocalAlert(
-          d.title || 'Tiket Baru',
-          d.body || '',
-          d.ticket_id || '',
-          localAlertKey(d.title || 'Tiket Baru', d.body || '', d.ticket_id || '')
-        );
-      }
     });
     return SW_REG;
   } catch (e) { console.error('[Push] Service worker register failed:', e); return null; }
@@ -2216,7 +2208,7 @@ async function disableNotif() {
   renderPage();
 }
 
-/* Foreground kini ditangani service worker via postMessage PUSH_RECEIVED */
+/* Toast web kini dipicu dari notifications/{user_id}; push hanya notifikasi sistem. */
 function showPushToast(title, body, ticketId) {
   const el = document.createElement('div');
   el.className = 'push-toast';

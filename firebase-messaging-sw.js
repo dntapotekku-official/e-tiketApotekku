@@ -17,9 +17,7 @@ self.addEventListener('push', (event) => {
       data: d,
       vibrate: [180, 80, 180]
     });
-    /* Halaman yang sedang terbuka: bunyikan bel + toast */
-    const wins = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-    wins.forEach(w => w.postMessage({ type: 'PUSH_RECEIVED', title, body, ticket_id: d.ticket_id || '' }));
+    /* Suara/toast web ditangani index.html dari notifications/{user_id}. */
   })());
 });
 
