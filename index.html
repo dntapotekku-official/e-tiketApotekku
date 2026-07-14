@@ -957,7 +957,12 @@ async function markAllNotifsRead() {
 function localAlertKey(title, body, ticketId) {
   return [ticketId || '', title || '', body || ''].join('|').slice(0, 300);
 }
+function deviceNotificationsOn() {
+  return LS.get('etiket_push_on') === '1' && 'Notification' in window && Notification.permission === 'granted';
+}
 function fireLocalAlert(title, body, ticketId, key) {
+  if (!deviceNotificationsOn()) return;
+
   const now = Date.now();
   for (const [k, ts] of RECENT_LOCAL_ALERTS) {
     if (now - ts > LOCAL_ALERT_DEDUPE_MS) RECENT_LOCAL_ALERTS.delete(k);
@@ -2136,15 +2141,15 @@ function pushStateLabel() {
   if (!pushSupported()) return { txt: 'Browser tidak mendukung push notification', cls: 'b-cancelled', canEnable: false };
   if (VAPID_PUBLIC_KEY.startsWith('GANTI_')) return { txt: 'VAPID key belum dikonfigurasi', cls: 'b-onhold', canEnable: false };
   if (Notification.permission === 'denied') return { txt: 'Permission ditolak — izinkan notifikasi di setelan browser', cls: 'b-rejected', canEnable: false };
-  if (Notification.permission === 'granted' && LS.get('etiket_push_on') === '1') return { txt: 'Notifikasi aktif di perangkat ini', cls: 'b-done', canEnable: false, active: true };
+  if (deviceNotificationsOn()) return { txt: 'Notifikasi aktif di perangkat ini', cls: 'b-done', canEnable: false, active: true };
   return { txt: 'Belum aktif di perangkat ini', cls: 'b-waiting', canEnable: true };
 }
 function pushPanelHtml() {
   const st = pushStateLabel();
   return `<div class="panel" style="margin-bottom:16px"><div class="panel-body" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
     <span style="font-size:22px">🔔</span>
-    <div style="flex:1;min-width:220px"><b>Push notification tiket baru</b>
-      <p class="hint" style="margin-top:2px">Notifikasi sistem muncul walau tab lain/di-minimize. ${badge(st.cls, esc(st.txt))}</p></div>
+    <div style="flex:1;min-width:220px"><b>Notifikasi & suara perangkat ini</b>
+      <p class="hint" style="margin-top:2px">Mengatur push notification dan bunyi/toast realtime di perangkat ini. ${badge(st.cls, esc(st.txt))}</p></div>
     ${st.canEnable ? `<button class="btn btn-blue btn-sm" onclick="enableNotif()">Aktifkan Notifikasi</button>` : ''}
     ${st.active ? `<button class="btn btn-ghost btn-sm" onclick="disableNotif()">Nonaktifkan di perangkat ini</button>` : ''}
   </div></div>`;
