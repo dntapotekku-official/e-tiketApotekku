@@ -1122,10 +1122,16 @@ function renderRoot() {
   const u = DATA.users[SESSION.user_id];
   if (!u || u.role !== SESSION.role) { doLogout(); return; }
   SESSION.name = u.name; SESSION.division_name = u.division_name || u.name; SESSION.superadmin = !!u.superadmin;
+  const firstShow = app.hidden; /* baru berpindah dari halaman login */
+  const keepY = firstShow ? 0 : (window.scrollY || window.pageYOffset || 0);
   login.hidden = true; app.hidden = false;
   renderNav(); renderPage();
   if (!location.pathname.slice(BASE.length)) syncUrl(ACTIVE_PAGE, true);
-  window.scrollTo(0, 0);
+  /* Sinkron data TIDAK boleh melempar scroll ke atas — pulihkan posisi semula */
+  try {
+    if (firstShow) window.scrollTo(0, 0);
+    else { window.scrollTo(0, keepY); requestAnimationFrame(() => window.scrollTo(0, keepY)); }
+  } catch (e) {}
 }
 function renderNav() {
   const unread = SESSION.role === 'viewer' ? 0 : unreadCount();
@@ -1146,7 +1152,7 @@ function goPage(p) {
   ACTIVE_PAGE = p; PAGE_ANIM = true;
   renderNav(); renderPage();
   syncUrl(p, !changed);
-  window.scrollTo(0, 0);
+  try { window.scrollTo(0, 0); } catch (e) {}
 }
 function renderPage() {
   const m = document.getElementById('mainContent');
