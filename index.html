@@ -464,7 +464,40 @@ tbody tr:hover { background: #FAFBFD; }
 .comment-box { display: flex; gap: 8px; margin-top: 8px; }
 .comment-box input { flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; }
 .attach-thumbs { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-.attach-thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+.attach-thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); cursor: zoom-in; transition: transform .15s ease; }
+.attach-wrap { position: relative; display: inline-block; }
+.attach-wrap:hover img { transform: scale(1.05); }
+.attach-eye {
+  position: absolute; right: 3px; bottom: 3px;
+  border: none; border-radius: 6px; padding: 1px 4px; font-size: 12px; line-height: 1.4;
+  background: rgba(0, 0, 0, .55); color: #fff; cursor: pointer;
+}
+.attach-eye:hover { background: rgba(0, 0, 0, .75); }
+.lightbox {
+  position: fixed; inset: 0; z-index: 120;
+  background: rgba(10, 12, 16, .85); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeUp .18s ease backwards;
+}
+.lightbox img { max-width: 92vw; max-height: 84vh; border-radius: 12px; box-shadow: 0 12px 48px rgba(0,0,0,.5); }
+.lb-close {
+  position: absolute; top: 16px; right: 18px; width: 40px; height: 40px;
+  border: none; border-radius: 50%; background: rgba(255,255,255,.14); color: #fff;
+  font-size: 18px; cursor: pointer;
+}
+.lb-close:hover { background: rgba(255,255,255,.28); }
+.lb-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 44px; height: 56px; border: none; border-radius: 10px;
+  background: rgba(255,255,255,.12); color: #fff; font-size: 30px; cursor: pointer;
+}
+.lb-nav:hover { background: rgba(255,255,255,.26); }
+.lb-prev { left: 14px; } .lb-next { right: 14px; }
+.lb-caption {
+  position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+  color: #fff; font-size: 13px; background: rgba(0,0,0,.45); padding: 7px 14px; border-radius: 999px; white-space: nowrap;
+}
+.lb-caption a { color: #ffd6d9; margin-left: 10px; text-decoration: none; }
 .notif-item { display: flex; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; align-items: flex-start; }
 .notif-item:last-child { border-bottom: none; }
 .notif-item.unread { background: var(--brand-soft); margin: 0 -18px; padding: 12px 18px; }
@@ -1221,8 +1254,37 @@ function attachThumbs(t) {
   const list = t.attachments || [];
   if (!list.length) return '';
   return `<div class="attach-thumbs">${list.map((a, i) =>
-    `<a href="${a.data}" download="${esc(a.name)}" title="${esc(a.name)}"><img src="${a.data}" alt="${esc(a.name)}"></a>`).join('')}</div>`;
+    `<span class="attach-wrap">
+      <img src="${a.data}" alt="Lampiran ${i + 1}" loading="lazy" onclick="openLightbox('${t.ticket_id}', ${i})">
+      <button type="button" class="attach-eye" onclick="openLightbox('${t.ticket_id}', ${i})" title="Lihat lampiran" aria-label="Lihat lampiran">👁️</button>
+    </span>`).join('')}</div>`;
 }
+
+/* ---- Lightbox pratinjau lampiran ---- */
+function openLightbox(ticketId, idx) {
+  const t = DATA.tickets[ticketId];
+  const list = (t && t.attachments) || [];
+  if (!list[idx]) return;
+  closeLightbox();
+  const total = list.length;
+  const el = document.createElement('div');
+  el.className = 'lightbox';
+  el.id = 'lightbox';
+  el.innerHTML = `
+    <button class="lb-close" onclick="closeLightbox()" aria-label="Tutup">✕</button>
+    ${total > 1 ? `<button class="lb-nav lb-prev" onclick="event.stopPropagation();openLightbox('${ticketId}', ${(idx - 1 + total) % total})" aria-label="Sebelumnya">‹</button>` : ''}
+    <img src="${list[idx].data}" alt="Lampiran ${idx + 1}">
+    ${total > 1 ? `<button class="lb-nav lb-next" onclick="event.stopPropagation();openLightbox('${ticketId}', ${(idx + 1) % total})" aria-label="Berikutnya">›</button>` : ''}
+    <div class="lb-caption">${t.ticket_number ? esc(t.ticket_number) + ' · ' : ''}Lampiran ${idx + 1} dari ${total}
+      <a href="${list[idx].data}" download="lampiran-${esc(String(t.ticket_number || ticketId))}-${idx + 1}.jpg">⬇ Unduh</a></div>`;
+  el.addEventListener('click', (e) => { if (e.target === el) closeLightbox(); });
+  document.body.appendChild(el);
+}
+function closeLightbox() {
+  const el = document.getElementById('lightbox');
+  if (el) el.remove();
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
 
 /* ---- Kartu tiket & statistik bersama ---- */
 function ticketCard(t, orderLabel, extra) {
