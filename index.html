@@ -485,6 +485,12 @@ tbody tr:hover { background: #FAFBFD; }
   border-radius: 6px; padding: 1px 5px; font-size: 12px; line-height: 1.4;
   background: var(--brand); color: #fff; text-decoration: none;
 }
+.attach-file-actions {
+  position: absolute; right: 5px; bottom: 5px; display: flex; gap: 4px;
+}
+.attach-file-actions .attach-eye, .attach-file-actions .attach-download {
+  position: static; display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 20px;
+}
 .lightbox {
   position: fixed; inset: 0; z-index: 120;
   background: rgba(10, 12, 16, .85); backdrop-filter: blur(3px);
@@ -492,6 +498,10 @@ tbody tr:hover { background: #FAFBFD; }
   animation: fadeUp .18s ease backwards;
 }
 .lightbox img { max-width: 92vw; max-height: 84vh; border-radius: 12px; box-shadow: 0 12px 48px rgba(0,0,0,.5); }
+.lightbox iframe {
+  width: min(92vw, 980px); height: 82vh; border: none; border-radius: 12px;
+  background: #fff; box-shadow: 0 12px 48px rgba(0,0,0,.5);
+}
 .lb-close {
   position: absolute; top: 16px; right: 18px; width: 40px; height: 40px;
   border: none; border-radius: 50%; background: rgba(255,255,255,.14); color: #fff;
@@ -1265,6 +1275,16 @@ function isAllowedAttach(f) {
 function isImageAttach(a) {
   return String((a && a.type) || '').startsWith('image/') || String((a && a.data) || '').startsWith('data:image/');
 }
+function canPreviewAttach(a) {
+  const type = String((a && a.type) || '');
+  const ext = attachExt(a && a.name);
+  return isImageAttach(a) || type === 'application/pdf' || ext === 'pdf' || type.startsWith('text/') || ['txt', 'csv'].includes(ext);
+}
+function attachViewerHtml(a, idx) {
+  const name = esc((a && a.name) || `Lampiran ${idx + 1}`);
+  if (isImageAttach(a)) return `<img src="${a.data}" alt="${name}">`;
+  return `<iframe src="${a.data}" title="${name}"></iframe>`;
+}
 function attachDownloadName(t, a, idx) {
   const ext = attachExt(a.name) || attachExt((a.type || '').replace('/', '.')) || 'file';
   const base = String((t && (t.ticket_number || t.ticket_id)) || 'lampiran');
@@ -1297,12 +1317,18 @@ function attachThumbs(t) {
       <img src="${a.data}" alt="${esc(name)}" loading="lazy" onclick="openLightbox('${t.ticket_id}', ${i})">
       <button type="button" class="attach-eye" onclick="openLightbox('${t.ticket_id}', ${i})" title="Lihat foto" aria-label="Lihat foto">👁️</button>
     </span>`;
+    const previewBtn = canPreviewAttach(a)
+      ? `<button type="button" class="attach-eye" onclick="openLightbox('${t.ticket_id}', ${i})" title="Lihat lampiran" aria-label="Lihat lampiran">👁️</button>`
+      : '';
     return `<span class="attach-wrap">
       <span class="attach-file" title="${esc(name)}">
         <span class="attach-file-icon">📎</span>
         <span style="min-width:0"><span class="attach-file-name">${esc(name)}</span><br><span class="attach-file-meta">${esc(attachExt(name) || 'file')}</span></span>
       </span>
-      <a class="attach-download" href="${a.data}" download="${esc(attachDownloadName(t, a, i))}" title="Unduh lampiran" aria-label="Unduh lampiran">⬇</a>
+      <span class="attach-file-actions">
+        ${previewBtn}
+        <a class="attach-download" href="${a.data}" download="${esc(attachDownloadName(t, a, i))}" title="Unduh lampiran" aria-label="Unduh lampiran">⬇</a>
+      </span>
     </span>`;
   }).join('')}</div>`;
 }
@@ -1312,7 +1338,7 @@ function openLightbox(ticketId, idx) {
   const t = DATA.tickets[ticketId];
   const list = (t && t.attachments) || [];
   if (!list[idx]) return;
-  if (!isImageAttach(list[idx])) {
+  if (!canPreviewAttach(list[idx])) {
     const a = document.createElement('a');
     a.href = list[idx].data;
     a.download = attachDownloadName(t, list[idx], idx);
@@ -1327,7 +1353,7 @@ function openLightbox(ticketId, idx) {
   el.innerHTML = `
     <button class="lb-close" onclick="closeLightbox()" aria-label="Tutup">✕</button>
     ${total > 1 ? `<button class="lb-nav lb-prev" onclick="event.stopPropagation();openLightbox('${ticketId}', ${(idx - 1 + total) % total})" aria-label="Sebelumnya">‹</button>` : ''}
-    <img src="${list[idx].data}" alt="Lampiran ${idx + 1}">
+    ${attachViewerHtml(list[idx], idx)}
     ${total > 1 ? `<button class="lb-nav lb-next" onclick="event.stopPropagation();openLightbox('${ticketId}', ${(idx + 1) % total})" aria-label="Berikutnya">›</button>` : ''}
     <div class="lb-caption">${t.ticket_number ? esc(t.ticket_number) + ' · ' : ''}${esc(list[idx].name || `Lampiran ${idx + 1}`)} (${idx + 1} dari ${total})
       <a href="${list[idx].data}" download="${esc(attachDownloadName(t, list[idx], idx))}">⬇ Unduh</a></div>`;
