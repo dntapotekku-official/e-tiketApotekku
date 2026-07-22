@@ -465,14 +465,26 @@ tbody tr:hover { background: #FAFBFD; }
 .comment-box input { flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; }
 .attach-thumbs { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .attach-thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); cursor: zoom-in; transition: transform .15s ease; }
-.attach-wrap { position: relative; display: inline-block; }
+.attach-wrap { position: relative; display: inline-flex; align-items: center; justify-content: center; }
 .attach-wrap:hover img { transform: scale(1.05); }
+.attach-file {
+  min-width: 150px; max-width: 220px; height: 64px; border: 1px solid var(--line); border-radius: 8px;
+  display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--surface); color: var(--ink);
+}
+.attach-file-icon { font-size: 22px; line-height: 1; }
+.attach-file-name { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attach-file-meta { font-size: 11px; color: var(--ink-3); text-transform: uppercase; }
 .attach-eye {
   position: absolute; right: 3px; bottom: 3px;
   border: none; border-radius: 6px; padding: 1px 4px; font-size: 12px; line-height: 1.4;
   background: rgba(0, 0, 0, .55); color: #fff; cursor: pointer;
 }
 .attach-eye:hover { background: rgba(0, 0, 0, .75); }
+.attach-download {
+  position: absolute; right: 5px; bottom: 5px;
+  border-radius: 6px; padding: 1px 5px; font-size: 12px; line-height: 1.4;
+  background: var(--brand); color: #fff; text-decoration: none;
+}
 .lightbox {
   position: fixed; inset: 0; z-index: 120;
   background: rgba(10, 12, 16, .85); backdrop-filter: blur(3px);
@@ -879,6 +891,11 @@ const PRIORITY_WEIGHT = { urgent: 0, high: 1, normal: 2, low: 3 };
 const TICKET_PREFIX = { urgent: 'URG', high: 'HGH', normal: 'NRM', low: 'LOW' };
 const MAX_ATTACH = 2;
 const MAX_ATTACH_BYTES = 400 * 1024;
+const ATTACH_ACCEPT = [
+  'image/*', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  '.txt', '.csv', '.zip', '.rar'
+].join(',');
+const ATTACH_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'zip', 'rar'];
 const NOW = () => Date.now();
 
 /* ---- Klasifikasi otomatis v2: berbasis skor berbobot ----
@@ -1221,7 +1238,7 @@ async function addComment(ticketId) {
   else await notify([t.division_id, t.accepted_by], `💬 ${SESSION.name}: "${text.slice(0, 60)}" pada tiket ${t.ticket_number}`, ticketId);
 }
 
-/* ---- Lampiran gambar ---- */
+/* ---- Lampiran file ---- */
 /* ---- Nomor WhatsApp ---- */
 function normalizeWa(raw) {
   let d = String(raw || '').replace(/[^0-9]/g, '');
@@ -1238,6 +1255,21 @@ function waLink(num) {
   return `<a href="https://wa.me/${esc(num)}" target="_blank" rel="noopener" style="color:var(--brand)">+${esc(num)}</a>`;
 }
 
+function attachExt(name) {
+  const m = String(name || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+  return m ? m[1] : '';
+}
+function isAllowedAttach(f) {
+  return (f.type || '').startsWith('image/') || ATTACH_EXTS.includes(attachExt(f.name));
+}
+function isImageAttach(a) {
+  return String((a && a.type) || '').startsWith('image/') || String((a && a.data) || '').startsWith('data:image/');
+}
+function attachDownloadName(t, a, idx) {
+  const ext = attachExt(a.name) || attachExt((a.type || '').replace('/', '.')) || 'file';
+  const base = String((t && (t.ticket_number || t.ticket_id)) || 'lampiran');
+  return `lampiran-${base}-${idx + 1}.${ext}`;
+}
 function onAttachChange(input) {
   const files = Array.from(input.files || []).slice(0, MAX_ATTACH);
   PENDING_ATTACH = [];
@@ -1245,13 +1277,13 @@ function onAttachChange(input) {
   let pending = files.length;
   if (!pending) { info.textContent = ''; return; }
   files.forEach(f => {
-    if (!f.type.startsWith('image/')) { pending--; info.textContent = 'Hanya file gambar yang didukung.'; return; }
+    if (!isAllowedAttach(f)) { pending--; info.textContent = `File ${f.name} tidak didukung.`; return; }
     if (f.size > MAX_ATTACH_BYTES) { pending--; info.textContent = `File ${f.name} melebihi 400 KB, dilewati.`; return; }
     const r = new FileReader();
     r.onload = () => {
       PENDING_ATTACH.push({ name: f.name, type: f.type, data: r.result });
       pending--;
-      if (pending <= 0) info.textContent = PENDING_ATTACH.length + ' gambar siap dilampirkan.';
+      if (pending <= 0) info.textContent = PENDING_ATTACH.length + ' file siap dilampirkan.';
     };
     r.readAsDataURL(f);
   });
@@ -1259,11 +1291,20 @@ function onAttachChange(input) {
 function attachThumbs(t) {
   const list = t.attachments || [];
   if (!list.length) return '';
-  return `<div class="attach-thumbs">${list.map((a, i) =>
-    `<span class="attach-wrap">
-      <img src="${a.data}" alt="Lampiran ${i + 1}" loading="lazy" onclick="openLightbox('${t.ticket_id}', ${i})">
-      <button type="button" class="attach-eye" onclick="openLightbox('${t.ticket_id}', ${i})" title="Lihat lampiran" aria-label="Lihat lampiran">👁️</button>
-    </span>`).join('')}</div>`;
+  return `<div class="attach-thumbs">${list.map((a, i) => {
+    const name = a.name || `Lampiran ${i + 1}`;
+    if (isImageAttach(a)) return `<span class="attach-wrap">
+      <img src="${a.data}" alt="${esc(name)}" loading="lazy" onclick="openLightbox('${t.ticket_id}', ${i})">
+      <button type="button" class="attach-eye" onclick="openLightbox('${t.ticket_id}', ${i})" title="Lihat foto" aria-label="Lihat foto">👁️</button>
+    </span>`;
+    return `<span class="attach-wrap">
+      <span class="attach-file" title="${esc(name)}">
+        <span class="attach-file-icon">📎</span>
+        <span style="min-width:0"><span class="attach-file-name">${esc(name)}</span><br><span class="attach-file-meta">${esc(attachExt(name) || 'file')}</span></span>
+      </span>
+      <a class="attach-download" href="${a.data}" download="${esc(attachDownloadName(t, a, i))}" title="Unduh lampiran" aria-label="Unduh lampiran">⬇</a>
+    </span>`;
+  }).join('')}</div>`;
 }
 
 /* ---- Lightbox pratinjau lampiran ---- */
@@ -1271,6 +1312,13 @@ function openLightbox(ticketId, idx) {
   const t = DATA.tickets[ticketId];
   const list = (t && t.attachments) || [];
   if (!list[idx]) return;
+  if (!isImageAttach(list[idx])) {
+    const a = document.createElement('a');
+    a.href = list[idx].data;
+    a.download = attachDownloadName(t, list[idx], idx);
+    a.click();
+    return;
+  }
   closeLightbox();
   const total = list.length;
   const el = document.createElement('div');
@@ -1281,8 +1329,8 @@ function openLightbox(ticketId, idx) {
     ${total > 1 ? `<button class="lb-nav lb-prev" onclick="event.stopPropagation();openLightbox('${ticketId}', ${(idx - 1 + total) % total})" aria-label="Sebelumnya">‹</button>` : ''}
     <img src="${list[idx].data}" alt="Lampiran ${idx + 1}">
     ${total > 1 ? `<button class="lb-nav lb-next" onclick="event.stopPropagation();openLightbox('${ticketId}', ${(idx + 1) % total})" aria-label="Berikutnya">›</button>` : ''}
-    <div class="lb-caption">${t.ticket_number ? esc(t.ticket_number) + ' · ' : ''}Lampiran ${idx + 1} dari ${total}
-      <a href="${list[idx].data}" download="lampiran-${esc(String(t.ticket_number || ticketId))}-${idx + 1}.jpg">⬇ Unduh</a></div>`;
+    <div class="lb-caption">${t.ticket_number ? esc(t.ticket_number) + ' · ' : ''}${esc(list[idx].name || `Lampiran ${idx + 1}`)} (${idx + 1} dari ${total})
+      <a href="${list[idx].data}" download="${esc(attachDownloadName(t, list[idx], idx))}">⬇ Unduh</a></div>`;
   el.addEventListener('click', (e) => { if (e.target === el) closeLightbox(); });
   document.body.appendChild(el);
 }
@@ -1429,8 +1477,8 @@ function renderDivisiTiket(m) {
           <input id="waNumber" inputmode="tel" placeholder="cth: 081234567890">
           <p class="hint">Untuk dihubungi PIC bila perlu klarifikasi cepat.</p></div>
         <div class="field"><label for="attachInput">Lampiran (opsional)</label>
-          <input type="file" id="attachInput" accept="image/*" multiple onchange="onAttachChange(this)">
-          <p class="hint">Maksimal ${MAX_ATTACH} gambar, masing-masing ≤ 400 KB (screenshot bug, mockup, dsb). <span id="attachInfo"></span></p></div>
+          <input type="file" id="attachInput" accept="${ATTACH_ACCEPT}" multiple onchange="onAttachChange(this)">
+          <p class="hint">Maksimal ${MAX_ATTACH} file, masing-masing ≤ 400 KB. Foto bisa dilihat langsung; file lain bisa diunduh. Format: ${ATTACH_EXTS.join(', ')}. <span id="attachInfo"></span></p></div>
         <button class="btn btn-blue" onclick="ambilTiket()">🎫 Ambil Tiket</button>
       </div></div>
     <div class="panel"><div class="panel-head"><h2>Tiket saya</h2></div>
@@ -2126,9 +2174,9 @@ function adminTicketFormHtml() {
         <div class="field"><label for="waNumber">Nomor WhatsApp (opsional)</label>
           <input id="waNumber" inputmode="tel" placeholder="cth: 081234567890"></div>
         <div class="field"><label for="attachInput">Lampiran (opsional)</label>
-          <input type="file" id="attachInput" accept="image/*" multiple onchange="onAttachChange(this)">
+          <input type="file" id="attachInput" accept="${ATTACH_ACCEPT}" multiple onchange="onAttachChange(this)">
           <div id="attachList" class="attach-list"></div>
-          <p class="hint">Maks 2 gambar, masing-masing ≤ 400 KB.</p></div>
+          <p class="hint">Maks ${MAX_ATTACH} file, masing-masing ≤ 400 KB. Foto bisa dilihat langsung; file lain bisa diunduh. Format: ${ATTACH_EXTS.join(', ')}. <span id="attachInfo"></span></p></div>
         <div id="formAlert" class="alert"></div>
         <button class="btn btn-red" onclick="ambilTiket()">🎫 Ambil Tiket Antrian</button>
       </div>
