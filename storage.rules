@@ -1,0 +1,13 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /tickets/{ticketId}/{fileName} {
+      allow read: if true;
+      allow create: if request.resource.size <= 400 * 1024
+        && request.resource.contentType.matches('image/.*|application/pdf|application/zip|application/vnd.*|text/.*|application/msword|application/octet-stream');
+      allow delete: if true;
+      allow update: if false;
+    }
+  }
+}

@@ -608,6 +608,7 @@ tbody tr:hover { background: #FAFBFD; }
 
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 /* ============================================================
@@ -737,6 +738,7 @@ const VAPID_PUBLIC_KEY = "BJCiFEjLOGCwQ5iQAMQGP13tub1vsQy98b-qWsqnp9T9C08e9WdY11
 
 const USE_FIREBASE = !!firebaseConfig.apiKey;
 let DB = null;
+let STORAGE = null;
 
 const LocalStore = {
   KEY: 'etiket_db',
@@ -813,6 +815,7 @@ const FirebaseStore = {
   init(cb) {
     firebase.initializeApp(firebaseConfig);
     DB = firebase.database();
+    STORAGE = firebase.storage();
     DB.ref('/').on('value', async snap => {
       let data = snap.val();
       if (!data || !data.users) { await DB.ref('/').update(Object.assign({ seed_version: SEED_VERSION }, SEED)); return; }
@@ -1290,6 +1293,53 @@ function attachDownloadName(t, a, idx) {
   const base = String((t && (t.ticket_number || t.ticket_id)) || 'lampiran');
   return `lampiran-${base}-${idx + 1}.${ext}`;
 }
+function safeStorageSegment(s) {
+  return String(s || 'file').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'file';
+}
+async function uploadTicketAttachments(ticketId, ticketNumber, attachments) {
+  const list = attachments || [];
+  if (!USE_FIREBASE || !STORAGE || !list.length) {
+    return list.map(a => ({ name: a.name, type: a.type, size: a.size || null, data: a.data }));
+  }
+  const safeTicket = safeStorageSegment(ticketNumber || ticketId);
+  return Promise.all(list.map(async (a, i) => {
+    if (!a.file) return a;
+    const name = safeStorageSegment(a.name || `lampiran-${i + 1}`);
+    const path = `tickets/${ticketId}/${Date.now()}-${i + 1}-${name}`;
+    const ref = STORAGE.ref(path);
+    await ref.put(a.file, { contentType: a.type || a.file.type || 'application/octet-stream' });
+    const url = await ref.getDownloadURL();
+    return {
+      name: a.name || name,
+      type: a.type || a.file.type || '',
+      size: a.size || a.file.size || null,
+      data: url,
+      storagePath: path,
+      storageBucket: firebaseConfig.storageBucket,
+      uploaded_at: NOW(),
+      ticket_number: safeTicket
+    };
+  }));
+}
+async function deleteTicketAttachmentsFromStorage(t) {
+  if (!USE_FIREBASE || !STORAGE || !t || !Array.isArray(t.attachments)) return { deleted: 0, failed: 0 };
+  const paths = [...new Set(t.attachments.map(a => a && a.storagePath).filter(Boolean))];
+  let deleted = 0;
+  let failed = 0;
+  for (const path of paths) {
+    try {
+      await STORAGE.ref(path).delete();
+      deleted++;
+    } catch (e) {
+      if (e && e.code === 'storage/object-not-found') deleted++;
+      else {
+        failed++;
+        console.warn('Gagal menghapus lampiran Storage:', path, e);
+      }
+    }
+  }
+  return { deleted, failed };
+}
 function onAttachChange(input) {
   const files = Array.from(input.files || []).slice(0, MAX_ATTACH);
   PENDING_ATTACH = [];
@@ -1301,7 +1351,7 @@ function onAttachChange(input) {
     if (f.size > MAX_ATTACH_BYTES) { pending--; info.textContent = `File ${f.name} melebihi 400 KB, dilewati.`; return; }
     const r = new FileReader();
     r.onload = () => {
-      PENDING_ATTACH.push({ name: f.name, type: f.type, data: r.result });
+      PENDING_ATTACH.push({ name: f.name, type: f.type, size: f.size, data: r.result, file: f });
       pending--;
       if (pending <= 0) info.textContent = PENDING_ATTACH.length + ' file siap dilampirkan.';
     };
@@ -1530,6 +1580,19 @@ async function ambilTiket() {
   const seq = await Store.increment('counters/ticket_seq');
   const ticketNumber = `${TICKET_PREFIX[priority]}-${String(seq).padStart(4, '0')}`;
   const id = Store.pushKey();
+  let attachments = null;
+  if (PENDING_ATTACH.length) {
+    a.textContent = 'Mengunggah lampiran...';
+    a.className = 'alert alert-ok show';
+    try {
+      attachments = await uploadTicketAttachments(id, ticketNumber, PENDING_ATTACH);
+    } catch (e) {
+      console.error(e);
+      a.textContent = 'Lampiran gagal diunggah ke Storage. Tiket belum dibuat, silakan coba lagi.';
+      a.className = 'alert alert-error show';
+      return;
+    }
+  }
   await Store.update({ ['tickets/' + id]: {
     ticket_id: id, ticket_number: ticketNumber,
     division_id: SESSION.user_id, division_name: SESSION.division_name,
@@ -1538,7 +1601,7 @@ async function ambilTiket() {
     auto_classification: priority, admin_classification: null, priority,
     queue_order: PRIORITY_WEIGHT[priority] * 100000 + (seq % 100000),
     status: 'waiting', deadline: null, current_progress: null,
-    attachments: PENDING_ATTACH.length ? PENDING_ATTACH : null,
+    attachments,
     created_by: SESSION.user_id, accepted_by: null,
     assigned_to: pic ? pic.id : null, assigned_name: pic ? pic.name : null,
     created_at: NOW(), accepted_at: null, done_at: null, updated_at: NOW(), deleted_at: null,
@@ -1776,11 +1839,19 @@ async function rollbackProgress(id) {
 
 async function deleteTicket(id) {
   const t = DATA.tickets[id];
-  if (!t || !confirm(`Hapus tiket ${t.ticket_number}? Nomor antrean tiket lain akan disesuaikan otomatis.`)) return;
+  const hasStorageFiles = !!(t && Array.isArray(t.attachments) && t.attachments.some(a => a && a.storagePath));
+  const extra = hasStorageFiles ? ' Lampiran di Firebase Storage juga akan dihapus.' : '';
+  if (!t || !confirm(`Hapus tiket ${t.ticket_number}? Nomor antrean tiket lain akan disesuaikan otomatis.${extra}`)) return;
+  const storageResult = await deleteTicketAttachmentsFromStorage(t);
+  if (storageResult.failed) {
+    alert(`Tiket belum dihapus karena ${storageResult.failed} lampiran gagal dihapus dari Storage. Coba lagi atau cek permission Firebase Storage.`);
+    return;
+  }
   const updates = { [`tickets/${id}/deleted_at`]: NOW(), [`tickets/${id}/updated_at`]: NOW() };
   requeue(updates, id);
   await Store.update(updates);
-  await logActivity('TICKET_DELETED', id, `Tiket ${t.ticket_number} dihapus admin, antrean disesuaikan otomatis`);
+  const attachInfo = storageResult.deleted ? `, ${storageResult.deleted} lampiran Storage ikut dihapus` : '';
+  await logActivity('TICKET_DELETED', id, `Tiket ${t.ticket_number} dihapus admin${attachInfo}, antrean disesuaikan otomatis`);
 }
 
 /* ================= VIEWER ================= */
