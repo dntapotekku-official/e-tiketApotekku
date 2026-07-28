@@ -870,6 +870,8 @@ let FILTER_ASSIGN = '';
 let UM_EDIT_ID = '';
 let OPEN_COMMENTS = {};
 let PENDING_ATTACH = [];
+let ATTACH_LOADING = false;
+let ATTACH_UPLOADING = false;
 let NOTIF_MARK_TIMER = null;
 let PAGE_ANIM = true;
 let ADMIN_FORM_OPEN = false;
@@ -903,7 +905,8 @@ const PRIORITY_BADGE = { urgent: 'b-urgent', high: 'b-high', normal: 'b-normal',
 const PRIORITY_WEIGHT = { urgent: 0, high: 1, normal: 2, low: 3 };
 const TICKET_PREFIX = { urgent: 'URG', high: 'HGH', normal: 'NRM', low: 'LOW' };
 const MAX_ATTACH = 5;
-const MAX_ATTACH_BYTES = 400 * 1024;
+const MAX_ATTACH_BYTES = 5 * 1024 * 1024;
+const MAX_ATTACH_LABEL = '5 MB';
 const ATTACH_ACCEPT = [
   'image/*', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
   '.txt', '.csv', '.zip', '.rar'
@@ -1188,12 +1191,13 @@ function renderPage() {
   const m = document.getElementById('mainContent');
   m.classList.toggle('page-anim', PAGE_ANIM);
   PAGE_ANIM = false;
-  if (ACTIVE_PAGE === 'akun') return renderAkun(m);
-  if (ACTIVE_PAGE === 'notif') return renderNotif(m);
-  if (ACTIVE_PAGE === 'monitoring' && SESSION.role === 'admin' && isSuper()) return renderViewer(m);
-  if (SESSION.role === 'divisi') return ACTIVE_PAGE === 'tiket' ? renderDivisiTiket(m) : renderDivisiDash(m);
-  if (SESSION.role === 'admin') return ACTIVE_PAGE === 'tiket' ? renderAdminTiket(m) : renderAdminDash(m);
-  return renderViewer(m);
+  if (ACTIVE_PAGE === 'akun') renderAkun(m);
+  else if (ACTIVE_PAGE === 'notif') renderNotif(m);
+  else if (ACTIVE_PAGE === 'monitoring' && SESSION.role === 'admin' && isSuper()) renderViewer(m);
+  else if (SESSION.role === 'divisi') ACTIVE_PAGE === 'tiket' ? renderDivisiTiket(m) : renderDivisiDash(m);
+  else if (SESSION.role === 'admin') ACTIVE_PAGE === 'tiket' ? renderAdminTiket(m) : renderAdminDash(m);
+  else renderViewer(m);
+  syncTicketSubmitState();
 }
 
 /* ---- Halaman notifikasi ---- */
@@ -1296,6 +1300,14 @@ function attachDownloadName(t, a, idx) {
 function safeStorageSegment(s) {
   return String(s || 'file').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'file';
 }
+function syncTicketSubmitState() {
+  const btn = document.getElementById('ticketSubmitBtn');
+  if (!btn) return;
+  btn.disabled = ATTACH_LOADING || ATTACH_UPLOADING;
+  if (ATTACH_UPLOADING) btn.textContent = 'Mengunggah lampiran...';
+  else if (ATTACH_LOADING) btn.textContent = 'Memproses lampiran...';
+  else btn.textContent = SESSION && SESSION.role === 'admin' ? '🎫 Ambil Tiket Antrian' : '🎫 Ambil Tiket';
+}
 async function uploadTicketAttachments(ticketId, ticketNumber, attachments) {
   const list = attachments || [];
   if (!USE_FIREBASE || !STORAGE || !list.length) {
@@ -1343,17 +1355,34 @@ async function deleteTicketAttachmentsFromStorage(t) {
 function onAttachChange(input) {
   const files = Array.from(input.files || []).slice(0, MAX_ATTACH);
   PENDING_ATTACH = [];
+  ATTACH_LOADING = false;
   const info = document.getElementById('attachInfo');
   let pending = files.length;
-  if (!pending) { info.textContent = ''; return; }
+  if (!pending) { info.textContent = ''; syncTicketSubmitState(); return; }
+  ATTACH_LOADING = true;
+  info.textContent = `Memproses ${pending} file...`;
+  syncTicketSubmitState();
+  const finishOne = () => {
+    pending--;
+    if (pending <= 0) {
+      ATTACH_LOADING = false;
+      info.textContent = PENDING_ATTACH.length
+        ? PENDING_ATTACH.length + ' file siap dilampirkan.'
+        : 'Tidak ada file yang siap dilampirkan.';
+      syncTicketSubmitState();
+    }
+  };
   files.forEach(f => {
-    if (!isAllowedAttach(f)) { pending--; info.textContent = `File ${f.name} tidak didukung.`; return; }
-    if (f.size > MAX_ATTACH_BYTES) { pending--; info.textContent = `File ${f.name} melebihi 400 KB, dilewati.`; return; }
+    if (!isAllowedAttach(f)) { info.textContent = `File ${f.name} tidak didukung.`; finishOne(); return; }
+    if (f.size > MAX_ATTACH_BYTES) { info.textContent = `File ${f.name} melebihi ${MAX_ATTACH_LABEL}, dilewati.`; finishOne(); return; }
     const r = new FileReader();
     r.onload = () => {
       PENDING_ATTACH.push({ name: f.name, type: f.type, size: f.size, data: r.result, file: f });
-      pending--;
-      if (pending <= 0) info.textContent = PENDING_ATTACH.length + ' file siap dilampirkan.';
+      finishOne();
+    };
+    r.onerror = () => {
+      info.textContent = `File ${f.name} gagal dibaca, dilewati.`;
+      finishOne();
     };
     r.readAsDataURL(f);
   });
@@ -1554,8 +1583,8 @@ function renderDivisiTiket(m) {
           <p class="hint">Untuk dihubungi PIC bila perlu klarifikasi cepat.</p></div>
         <div class="field"><label for="attachInput">Lampiran (opsional)</label>
           <input type="file" id="attachInput" accept="${ATTACH_ACCEPT}" multiple onchange="onAttachChange(this)">
-          <p class="hint">Maksimal ${MAX_ATTACH} file, masing-masing ≤ 400 KB. Foto bisa dilihat langsung; file lain bisa diunduh. Format: ${ATTACH_EXTS.join(', ')}. <span id="attachInfo"></span></p></div>
-        <button class="btn btn-blue" onclick="ambilTiket()">🎫 Ambil Tiket</button>
+          <p class="hint">Maksimal ${MAX_ATTACH} file, masing-masing ≤ ${MAX_ATTACH_LABEL}. Foto bisa dilihat langsung; file lain bisa diunduh. Format: ${ATTACH_EXTS.join(', ')}. <span id="attachInfo"></span></p></div>
+        <button class="btn btn-blue" id="ticketSubmitBtn" onclick="ambilTiket()">🎫 Ambil Tiket</button>
       </div></div>
     <div class="panel"><div class="panel-head"><h2>Tiket saya</h2></div>
     <div class="panel-body">${list.length ? list.map((t, i) => {
@@ -1567,6 +1596,13 @@ function renderDivisiTiket(m) {
 }
 async function ambilTiket() {
   const a = document.getElementById('formAlert');
+  if (ATTACH_LOADING) {
+    a.textContent = 'Lampiran masih diproses. Tunggu sampai status file siap, lalu submit kembali.';
+    a.className = 'alert alert-error show';
+    syncTicketSubmitState();
+    return;
+  }
+  if (ATTACH_UPLOADING) return;
   const reqText = document.getElementById('reqText').value.trim();
   const systemId = SELECTED_SYS ? SELECTED_SYS.id : '';
   const systemName = SELECTED_SYS ? SELECTED_SYS.name : '';
@@ -1582,6 +1618,8 @@ async function ambilTiket() {
   const id = Store.pushKey();
   let attachments = null;
   if (PENDING_ATTACH.length) {
+    ATTACH_UPLOADING = true;
+    syncTicketSubmitState();
     a.textContent = 'Mengunggah lampiran...';
     a.className = 'alert alert-ok show';
     try {
@@ -1590,6 +1628,8 @@ async function ambilTiket() {
       console.error(e);
       a.textContent = 'Lampiran gagal diunggah ke Storage. Tiket belum dibuat, silakan coba lagi.';
       a.className = 'alert alert-error show';
+      ATTACH_UPLOADING = false;
+      syncTicketSubmitState();
       return;
     }
   }
@@ -1613,6 +1653,8 @@ async function ambilTiket() {
   await notify(generalTargets, `🎫 Tiket baru ${ticketNumber} dari ${SESSION.division_name} (${PRIORITY_LABEL[priority]}): ${reqText.slice(0, 60)}`, id);
   if (pic && pic.id !== SESSION.user_id) await notify([pic.id], `🎯 Tiket baru di antrian Anda (${systemName}): ${ticketNumber} dari ${SESSION.division_name} (${PRIORITY_LABEL[priority]})`, id);
   PENDING_ATTACH = [];
+  ATTACH_LOADING = false;
+  ATTACH_UPLOADING = false;
   SELECTED_SYS = null;
   renderPage();
   const a2 = document.getElementById('formAlert');
@@ -2273,9 +2315,9 @@ function adminTicketFormHtml() {
         <div class="field"><label for="attachInput">Lampiran (opsional)</label>
           <input type="file" id="attachInput" accept="${ATTACH_ACCEPT}" multiple onchange="onAttachChange(this)">
           <div id="attachList" class="attach-list"></div>
-          <p class="hint">Maks ${MAX_ATTACH} file, masing-masing ≤ 400 KB. Foto bisa dilihat langsung; file lain bisa diunduh. Format: ${ATTACH_EXTS.join(', ')}. <span id="attachInfo"></span></p></div>
+          <p class="hint">Maks ${MAX_ATTACH} file, masing-masing ≤ ${MAX_ATTACH_LABEL}. Foto bisa dilihat langsung; file lain bisa diunduh. Format: ${ATTACH_EXTS.join(', ')}. <span id="attachInfo"></span></p></div>
         <div id="formAlert" class="alert"></div>
-        <button class="btn btn-red" onclick="ambilTiket()">🎫 Ambil Tiket Antrian</button>
+        <button class="btn btn-red" id="ticketSubmitBtn" onclick="ambilTiket()">🎫 Ambil Tiket Antrian</button>
       </div>
     </div>`;
 }
