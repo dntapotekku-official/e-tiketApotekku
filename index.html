@@ -584,6 +584,7 @@ tbody tr:hover { background: #FAFBFD; }
     <h3 id="mdTitle">Tentukan deadline pengerjaan</h3>
     <p class="hint" id="mdTicketInfo" style="margin-bottom:12px"></p>
     <div class="field"><label for="mdDate">Tanggal deadline</label><input type="date" id="mdDate"></div>
+    <div class="field" id="mdReasonField"><label for="mdReason">Alasan perubahan</label><textarea id="mdReason" placeholder="Jelaskan alasan perubahan deadline..."></textarea></div>
     <div class="field" id="mdAssignField"><label>Ditugaskan ke (PIC)</label><div id="mdAssignWrap"></div></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeDeadlineModal()">Batal</button>
@@ -964,6 +965,10 @@ function priorityBadge(t) { const p = effectivePriority(t); return badge(PRIORIT
 function isOverdue(t) { return t.status === 'in_progress' && t.deadline && t.deadline < NOW(); }
 function overdueBadge(t) { return isOverdue(t) ? badge('b-overdue', 'Terlambat') : ''; }
 function isClosed(t) { return ['done', 'rejected', 'cancelled'].includes(t.status); }
+function pendingDeadlineRequest(t) {
+  const r = t && t.deadline_request;
+  return r && r.status === 'pending' && r.requested_deadline ? r : null;
+}
 function ticketList() {
   return Object.values(DATA.tickets || {}).filter(t => !t.deleted_at).sort((a, b) => {
     const sw = STATUS_WEIGHT[a.status] - STATUS_WEIGHT[b.status];
@@ -1469,6 +1474,8 @@ function ticketCard(t, orderLabel, extra) {
       <div class="ticket-meta">
         <span>Masuk <b>${fmtTime(t.created_at)}</b></span>
         ${t.deadline ? `<span>Deadline <b>${fmtDate(t.deadline)}</b></span>` : ''}
+        ${pendingDeadlineRequest(t) ? `<span>Pengajuan deadline <b>${fmtDate(pendingDeadlineRequest(t).requested_deadline)}</b></span>` : ''}
+        ${pendingDeadlineRequest(t) && pendingDeadlineRequest(t).reason ? `<span>Alasan deadline <b>${esc(pendingDeadlineRequest(t).reason)}</b></span>` : ''}
         ${t.assigned_name ? `<span>PIC <b>${esc(t.assigned_name)}</b></span>` : ''}
         ${t.wa_number ? `<span>WA <b>${waLink(t.wa_number)}</b></span>` : ''}
         ${t.status === 'rejected' && t.reject_reason ? `<span>Alasan <b>${esc(t.reject_reason)}</b></span>` : ''}
@@ -1718,6 +1725,7 @@ function renderAdminTiket(m) {
     ${list.length ? list.map(t => {
       const qi = queue.findIndex(x => x.ticket_id === t.ticket_id);
       const p = effectivePriority(t);
+      const deadlineReq = pendingDeadlineRequest(t);
       const sel = comboField('cls-' + t.ticket_id, priorityItems(), p, v => changeClassification(t.ticket_id, v), 'Klasifikasi...', 'width:130px;display:inline-block');
       let actions = '';
       if (t.status === 'waiting') actions = `
@@ -1733,7 +1741,11 @@ function renderAdminTiket(m) {
       }
       else if (t.status === 'on_hold') actions = `<button class="btn btn-blue btn-sm" onclick="toggleHold('${t.ticket_id}')">▶ Lanjutkan</button>`;
       if (SESSION.role === 'admin' && t.deadline && !isClosed(t)) {
-        actions += ` <button class="btn btn-ghost btn-sm" onclick="editDeadline('${t.ticket_id}')">✎ Edit deadline</button>`;
+        actions += ` <button class="btn btn-ghost btn-sm" onclick="editDeadline('${t.ticket_id}')">${deadlineReq ? '✎ Ubah pengajuan' : '✎ Edit deadline'}</button>`;
+      }
+      if (isSuper() && deadlineReq) {
+        actions += ` <button class="btn btn-green btn-sm" onclick="approveDeadlineChange('${t.ticket_id}')">✓ Setujui deadline</button>`;
+        actions += ` <button class="btn btn-ghost btn-sm" onclick="rejectDeadlineChange('${t.ticket_id}')">Tolak deadline</button>`;
       }
       if (SESSION.role === 'admin' && ['in_progress', 'on_hold', 'done'].includes(t.status)) {
         const atFirst = t.status !== 'done' && PROGRESS_STEPS.indexOf(t.current_progress) <= 0;
@@ -1773,6 +1785,8 @@ function acceptTicket(id) {
   document.getElementById('mdTitle').textContent = 'Tentukan deadline pengerjaan';
   document.getElementById('mdTicketInfo').textContent = `Tiket ${t.ticket_number} — ${t.division_name}`;
   document.getElementById('mdDate').value = dateInputValue(t.deadline);
+  document.getElementById('mdReasonField').style.display = 'none';
+  document.getElementById('mdReason').value = '';
   document.getElementById('mdAssignField').style.display = '';
   document.getElementById('mdSaveBtn').textContent = 'Simpan & mulai';
   const sysPic = t.assigned_to || (DATA.systems[t.system_id] || {}).pic;
@@ -1784,16 +1798,20 @@ function editDeadline(id) {
   DEADLINE_ID = id;
   DEADLINE_MODE = 'edit';
   const t = DATA.tickets[id];
+  const req = pendingDeadlineRequest(t);
   document.getElementById('mdTitle').textContent = 'Edit tanggal deadline';
   document.getElementById('mdTicketInfo').textContent = `Tiket ${t.ticket_number} — ${t.division_name}`;
-  document.getElementById('mdDate').value = dateInputValue(t.deadline);
+  document.getElementById('mdDate').value = dateInputValue(req ? req.requested_deadline : t.deadline);
+  document.getElementById('mdReasonField').style.display = '';
+  document.getElementById('mdReason').value = req ? (req.reason || '') : '';
   document.getElementById('mdAssignField').style.display = 'none';
   document.getElementById('mdAssignWrap').innerHTML = '';
-  document.getElementById('mdSaveBtn').textContent = 'Simpan deadline';
+  document.getElementById('mdSaveBtn').textContent = 'Ajukan deadline';
   document.getElementById('modalDeadline').classList.add('show');
 }
 function closeDeadlineModal() {
   document.getElementById('modalDeadline').classList.remove('show');
+  document.getElementById('mdReasonField').style.display = 'none';
   document.getElementById('mdAssignField').style.display = '';
   DEADLINE_ID = null;
   DEADLINE_MODE = 'accept';
@@ -1804,13 +1822,22 @@ async function saveDeadline() {
   const t = DATA.tickets[DEADLINE_ID];
   const deadline = new Date(dateVal + 'T23:59:59').getTime();
   if (DEADLINE_MODE === 'edit') {
+    const reason = (document.getElementById('mdReason').value || '').trim();
+    if (!reason) { alert('Alasan perubahan deadline wajib diisi.'); return; }
     await Store.update({
-      [`tickets/${t.ticket_id}/deadline`]: deadline,
+      [`tickets/${t.ticket_id}/deadline_request`]: {
+        status: 'pending',
+        previous_deadline: t.deadline || null,
+        requested_deadline: deadline,
+        reason,
+        requested_by: SESSION.user_id,
+        requested_by_name: SESSION.name,
+        requested_at: NOW()
+      },
       [`tickets/${t.ticket_id}/updated_at`]: NOW()
     });
-    await logActivity('DEADLINE_UPDATED', t.ticket_id, `Deadline tiket ${t.ticket_number} diubah menjadi ${fmtDate(deadline)}`);
-    await notify([t.division_id], `Tanggal deadline tiket ${t.ticket_number} diubah menjadi ${fmtDate(deadline)}.`, t.ticket_id);
-    if (t.assigned_to) await notify([t.assigned_to], `Deadline tiket ${t.ticket_number} diubah menjadi ${fmtDate(deadline)}.`, t.ticket_id);
+    await logActivity('DEADLINE_CHANGE_REQUESTED', t.ticket_id, `Perubahan deadline tiket ${t.ticket_number} diajukan ke ${fmtDate(deadline)} oleh ${SESSION.name}. Alasan: ${reason}`);
+    await notify(superIds(), `Pengajuan perubahan deadline ${t.ticket_number} ke ${fmtDate(deadline)} oleh ${SESSION.name}.`, t.ticket_id);
     closeDeadlineModal();
     return;
   }
@@ -1831,6 +1858,41 @@ async function saveDeadline() {
   await notify([t.division_id], `✓ Tiket ${t.ticket_number} di-accept. PIC: ${assignedName}, deadline ${fmtDate(deadline)}.`, t.ticket_id);
   await notify([assignedTo], `📌 Anda ditugaskan sebagai PIC tiket ${t.ticket_number} (${t.division_name}).`, t.ticket_id);
   closeDeadlineModal();
+}
+async function approveDeadlineChange(id) {
+  if (!isSuper()) return;
+  const t = DATA.tickets[id];
+  const req = pendingDeadlineRequest(t);
+  if (!req) return;
+  if (!confirm(`Setujui perubahan deadline ${t.ticket_number} menjadi ${fmtDate(req.requested_deadline)}?`)) return;
+  await Store.update({
+    [`tickets/${id}/deadline`]: req.requested_deadline,
+    [`tickets/${id}/deadline_request/status`]: 'approved',
+    [`tickets/${id}/deadline_request/approved_by`]: SESSION.user_id,
+    [`tickets/${id}/deadline_request/approved_by_name`]: SESSION.name,
+    [`tickets/${id}/deadline_request/approved_at`]: NOW(),
+    [`tickets/${id}/updated_at`]: NOW()
+  });
+  await logActivity('DEADLINE_CHANGE_APPROVED', id, `Perubahan deadline tiket ${t.ticket_number} disetujui superadmin menjadi ${fmtDate(req.requested_deadline)}`);
+  await notify([t.division_id, t.assigned_to, req.requested_by], `✓ Perubahan deadline tiket ${t.ticket_number} disetujui menjadi ${fmtDate(req.requested_deadline)}.`, id);
+}
+async function rejectDeadlineChange(id) {
+  if (!isSuper()) return;
+  const t = DATA.tickets[id];
+  const req = pendingDeadlineRequest(t);
+  if (!req) return;
+  const note = prompt(`Tolak pengajuan deadline ${t.ticket_number}? Catatan opsional untuk pengaju:`, '');
+  if (note === null) return;
+  await Store.update({
+    [`tickets/${id}/deadline_request/status`]: 'rejected',
+    [`tickets/${id}/deadline_request/rejected_by`]: SESSION.user_id,
+    [`tickets/${id}/deadline_request/rejected_by_name`]: SESSION.name,
+    [`tickets/${id}/deadline_request/rejected_at`]: NOW(),
+    [`tickets/${id}/deadline_request/reject_note`]: (note || '').trim(),
+    [`tickets/${id}/updated_at`]: NOW()
+  });
+  await logActivity('DEADLINE_CHANGE_REJECTED', id, `Perubahan deadline tiket ${t.ticket_number} ditolak superadmin${note ? `: ${note}` : ''}`);
+  await notify([t.assigned_to, req.requested_by], `Perubahan deadline tiket ${t.ticket_number} ditolak superadmin${note ? `: ${note}` : '.'}`, id);
 }
 function rejectTicket(id) {
   REJECT_ID = id;
