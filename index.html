@@ -581,13 +581,13 @@ tbody tr:hover { background: #FAFBFD; }
 <!-- Modal deadline -->
 <div class="modal-backdrop" id="modalDeadline">
   <div class="modal">
-    <h3>Tentukan deadline pengerjaan</h3>
+    <h3 id="mdTitle">Tentukan deadline pengerjaan</h3>
     <p class="hint" id="mdTicketInfo" style="margin-bottom:12px"></p>
     <div class="field"><label for="mdDate">Tanggal deadline</label><input type="date" id="mdDate"></div>
-    <div class="field"><label>Ditugaskan ke (PIC)</label><div id="mdAssignWrap"></div></div>
+    <div class="field" id="mdAssignField"><label>Ditugaskan ke (PIC)</label><div id="mdAssignWrap"></div></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeDeadlineModal()">Batal</button>
-      <button class="btn btn-green" onclick="saveDeadline()">Simpan &amp; mulai</button>
+      <button class="btn btn-green" id="mdSaveBtn" onclick="saveDeadline()">Simpan &amp; mulai</button>
     </div>
   </div>
 </div>
@@ -863,6 +863,7 @@ const Store = USE_FIREBASE ? FirebaseStore : LocalStore;
 let DATA = { users: {}, systems: {}, tickets: {}, activity_logs: {}, comments: {}, notifications: {}, counters: {} };
 let SESSION = null;
 let DEADLINE_ID = null;
+let DEADLINE_MODE = 'accept';
 let REJECT_ID = null;
 let ACTIVE_PAGE = 'dashboard';
 let FILTER_STATUS = '';
@@ -941,6 +942,12 @@ function autoClassify(requestText, systemName) {
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function fmtTime(ts) { return ts ? new Date(ts).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'; }
 function fmtDate(ts) { return ts ? new Date(ts).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'; }
+function dateInputValue(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 function fmtDur(ms) {
   if (ms == null || isNaN(ms) || ms < 0) return '-';
   const m = ms / 60000;
@@ -1725,6 +1732,9 @@ function renderAdminTiket(m) {
         actions += ' ' + comboField('pic-' + t.ticket_id, adminItems(), t.assigned_to, v => reassign(t.ticket_id, v), 'Ganti PIC...', 'width:170px;display:inline-block');
       }
       else if (t.status === 'on_hold') actions = `<button class="btn btn-blue btn-sm" onclick="toggleHold('${t.ticket_id}')">▶ Lanjutkan</button>`;
+      if (SESSION.role === 'admin' && t.deadline && !isClosed(t)) {
+        actions += ` <button class="btn btn-ghost btn-sm" onclick="editDeadline('${t.ticket_id}')">✎ Edit deadline</button>`;
+      }
       if (SESSION.role === 'admin' && ['in_progress', 'on_hold', 'done'].includes(t.status)) {
         const atFirst = t.status !== 'done' && PROGRESS_STEPS.indexOf(t.current_progress) <= 0;
         actions += ` <button class="btn btn-ghost btn-sm" onclick="rollbackProgress('${t.ticket_id}')">↩ ${t.status === 'done' ? 'Buka kembali' : atFirst ? 'Ke antrean' : 'Mundurkan'}</button>`;
@@ -1758,20 +1768,52 @@ async function moveTicket(id, dir) {
 }
 function acceptTicket(id) {
   DEADLINE_ID = id;
+  DEADLINE_MODE = 'accept';
   const t = DATA.tickets[id];
+  document.getElementById('mdTitle').textContent = 'Tentukan deadline pengerjaan';
   document.getElementById('mdTicketInfo').textContent = `Tiket ${t.ticket_number} — ${t.division_name}`;
-  document.getElementById('mdDate').value = '';
+  document.getElementById('mdDate').value = dateInputValue(t.deadline);
+  document.getElementById('mdAssignField').style.display = '';
+  document.getElementById('mdSaveBtn').textContent = 'Simpan & mulai';
   const sysPic = t.assigned_to || (DATA.systems[t.system_id] || {}).pic;
   MD_DEF_PIC = (sysPic && DATA.users[sysPic] && DATA.users[sysPic].role === 'admin') ? sysPic : SESSION.user_id;
   document.getElementById('mdAssignWrap').innerHTML = comboField('mdAssign', adminItems(), MD_DEF_PIC, null, 'Cari admin...');
   document.getElementById('modalDeadline').classList.add('show');
 }
-function closeDeadlineModal() { document.getElementById('modalDeadline').classList.remove('show'); DEADLINE_ID = null; }
+function editDeadline(id) {
+  DEADLINE_ID = id;
+  DEADLINE_MODE = 'edit';
+  const t = DATA.tickets[id];
+  document.getElementById('mdTitle').textContent = 'Edit tanggal deadline';
+  document.getElementById('mdTicketInfo').textContent = `Tiket ${t.ticket_number} — ${t.division_name}`;
+  document.getElementById('mdDate').value = dateInputValue(t.deadline);
+  document.getElementById('mdAssignField').style.display = 'none';
+  document.getElementById('mdAssignWrap').innerHTML = '';
+  document.getElementById('mdSaveBtn').textContent = 'Simpan deadline';
+  document.getElementById('modalDeadline').classList.add('show');
+}
+function closeDeadlineModal() {
+  document.getElementById('modalDeadline').classList.remove('show');
+  document.getElementById('mdAssignField').style.display = '';
+  DEADLINE_ID = null;
+  DEADLINE_MODE = 'accept';
+}
 async function saveDeadline() {
   const dateVal = document.getElementById('mdDate').value;
   if (!dateVal || !DEADLINE_ID) return;
   const t = DATA.tickets[DEADLINE_ID];
   const deadline = new Date(dateVal + 'T23:59:59').getTime();
+  if (DEADLINE_MODE === 'edit') {
+    await Store.update({
+      [`tickets/${t.ticket_id}/deadline`]: deadline,
+      [`tickets/${t.ticket_id}/updated_at`]: NOW()
+    });
+    await logActivity('DEADLINE_UPDATED', t.ticket_id, `Deadline tiket ${t.ticket_number} diubah menjadi ${fmtDate(deadline)}`);
+    await notify([t.division_id], `Tanggal deadline tiket ${t.ticket_number} diubah menjadi ${fmtDate(deadline)}.`, t.ticket_id);
+    if (t.assigned_to) await notify([t.assigned_to], `Deadline tiket ${t.ticket_number} diubah menjadi ${fmtDate(deadline)}.`, t.ticket_id);
+    closeDeadlineModal();
+    return;
+  }
   const assignedTo = comboVal('mdAssign') || MD_DEF_PIC || SESSION.user_id;
   const assignedName = (DATA.users[assignedTo] || {}).name || SESSION.name;
   await Store.update({
