@@ -303,6 +303,11 @@ tbody tr:hover { background: #FAFBFD; }
 }
 .modal h3 { font-size: 17px; margin-bottom: 14px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.note-box {
+  width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--soft);
+  padding: 10px 12px; font-size: 13px; color: var(--ink); line-height: 1.45;
+}
+.note-box .note-label { display: block; color: var(--ink-3); font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
 
 .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .toolbar select { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font: inherit; background: var(--surface); }
@@ -607,6 +612,20 @@ tbody tr:hover { background: #FAFBFD; }
   </div>
 </div>
 
+<!-- Modal review deadline -->
+<div class="modal-backdrop" id="modalDeadlineReview">
+  <div class="modal">
+    <h3 id="drTitle">Review pengajuan deadline</h3>
+    <p class="hint" id="drTicketInfo" style="margin-bottom:12px"></p>
+    <div class="field"><label for="drNote">Catatan superadmin</label>
+      <textarea id="drNote" placeholder="Tulis catatan untuk PIC/pengaju..."></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeDeadlineReviewModal()">Batal</button>
+      <button class="btn btn-green" id="drSaveBtn" onclick="saveDeadlineReview()">Simpan</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
@@ -865,6 +884,8 @@ let DATA = { users: {}, systems: {}, tickets: {}, activity_logs: {}, comments: {
 let SESSION = null;
 let DEADLINE_ID = null;
 let DEADLINE_MODE = 'accept';
+let DEADLINE_REVIEW_ID = null;
+let DEADLINE_REVIEW_ACTION = '';
 let REJECT_ID = null;
 let ACTIVE_PAGE = 'dashboard';
 let FILTER_STATUS = '';
@@ -1482,11 +1503,11 @@ function ticketCard(t, orderLabel, extra) {
         <span>Masuk <b>${fmtTime(t.created_at)}</b></span>
         ${t.deadline ? `<span>Deadline <b>${fmtDate(t.deadline)}</b></span>` : ''}
         ${pendingDeadlineRequest(t) ? `<span>Pengajuan deadline <b>${fmtDate(pendingDeadlineRequest(t).requested_deadline)}</b></span>` : ''}
-        ${pendingDeadlineRequest(t) && pendingDeadlineRequest(t).reason ? `<span>Alasan deadline <b>${esc(pendingDeadlineRequest(t).reason)}</b></span>` : ''}
         ${t.assigned_name ? `<span>PIC <b>${esc(t.assigned_name)}</b></span>` : ''}
         ${t.wa_number ? `<span>WA <b>${waLink(t.wa_number)}</b></span>` : ''}
         ${t.status === 'rejected' && t.reject_reason ? `<span>Alasan <b>${esc(t.reject_reason)}</b></span>` : ''}
       </div>
+      ${pendingDeadlineRequest(t) && pendingDeadlineRequest(t).reason ? `<div class="note-box" style="margin-top:10px"><span class="note-label">Alasan perubahan deadline</span>${esc(pendingDeadlineRequest(t).reason)}</div>` : ''}
       ${attachThumbs(t)}
       ${['in_progress', 'on_hold', 'done'].includes(t.status) && t.current_progress ? renderProgressBar(t.current_progress) : ''}
       ${extra || ''}
@@ -1728,8 +1749,8 @@ function renderDeadlineApproval(m) {
             <span class="badge b-low">Deadline lama: ${fmtDate(req.previous_deadline)}</span>
             <span class="badge b-waiting">Deadline baru: ${fmtDate(req.requested_deadline)}</span>
             <span class="badge b-low">Pengaju: ${esc(req.requested_by_name || '-')}</span>
-            <button class="btn btn-green btn-sm" onclick="approveDeadlineChange('${t.ticket_id}')">✓ Setujui deadline</button>
-            <button class="btn btn-ghost btn-sm" onclick="rejectDeadlineChange('${t.ticket_id}')">Tolak deadline</button>
+            <button class="btn btn-green btn-sm" onclick="openDeadlineReview('${t.ticket_id}', 'approve')">✓ Setujui deadline</button>
+            <button class="btn btn-ghost btn-sm" onclick="openDeadlineReview('${t.ticket_id}', 'reject')">Tolak deadline</button>
             ${commentBlock(t)}
           </div>`;
           return ticketCard(t, 'Approval', extra);
@@ -1883,41 +1904,59 @@ async function saveDeadline() {
   await notify([assignedTo], `📌 Anda ditugaskan sebagai PIC tiket ${t.ticket_number} (${t.division_name}).`, t.ticket_id);
   closeDeadlineModal();
 }
-async function approveDeadlineChange(id) {
+function openDeadlineReview(id, action) {
   if (!isSuper()) return;
   const t = DATA.tickets[id];
   const req = pendingDeadlineRequest(t);
   if (!req) return;
-  if (!confirm(`Setujui perubahan deadline ${t.ticket_number} menjadi ${fmtDate(req.requested_deadline)}?`)) return;
-  await Store.update({
-    [`tickets/${id}/deadline`]: req.requested_deadline,
-    [`tickets/${id}/deadline_request/status`]: 'approved',
-    [`tickets/${id}/deadline_request/approved_by`]: SESSION.user_id,
-    [`tickets/${id}/deadline_request/approved_by_name`]: SESSION.name,
-    [`tickets/${id}/deadline_request/approved_at`]: NOW(),
-    [`tickets/${id}/updated_at`]: NOW()
-  });
-  await logActivity('DEADLINE_CHANGE_APPROVED', id, `Perubahan deadline tiket ${t.ticket_number} disetujui superadmin menjadi ${fmtDate(req.requested_deadline)}`);
-  await notify([t.division_id, t.assigned_to, req.requested_by], `✓ Perubahan deadline tiket ${t.ticket_number} disetujui menjadi ${fmtDate(req.requested_deadline)}.`, id);
-  renderNav(); renderPage();
+  DEADLINE_REVIEW_ID = id;
+  DEADLINE_REVIEW_ACTION = action;
+  document.getElementById('drTitle').textContent = action === 'approve' ? 'Setujui perubahan deadline' : 'Tolak perubahan deadline';
+  document.getElementById('drTicketInfo').textContent = `Tiket ${t.ticket_number} — ${fmtDate(req.previous_deadline)} → ${fmtDate(req.requested_deadline)}`;
+  document.getElementById('drNote').value = '';
+  document.getElementById('drSaveBtn').textContent = action === 'approve' ? 'Setujui deadline' : 'Tolak deadline';
+  document.getElementById('drSaveBtn').className = action === 'approve' ? 'btn btn-green' : 'btn btn-danger';
+  document.getElementById('modalDeadlineReview').classList.add('show');
 }
-async function rejectDeadlineChange(id) {
-  if (!isSuper()) return;
-  const t = DATA.tickets[id];
+function closeDeadlineReviewModal() {
+  document.getElementById('modalDeadlineReview').classList.remove('show');
+  DEADLINE_REVIEW_ID = null;
+  DEADLINE_REVIEW_ACTION = '';
+}
+async function saveDeadlineReview() {
+  if (!isSuper() || !DEADLINE_REVIEW_ID || !DEADLINE_REVIEW_ACTION) return;
+  const t = DATA.tickets[DEADLINE_REVIEW_ID];
   const req = pendingDeadlineRequest(t);
-  if (!req) return;
-  const note = prompt(`Tolak pengajuan deadline ${t.ticket_number}? Catatan opsional untuk pengaju:`, '');
-  if (note === null) return;
-  await Store.update({
-    [`tickets/${id}/deadline_request/status`]: 'rejected',
-    [`tickets/${id}/deadline_request/rejected_by`]: SESSION.user_id,
-    [`tickets/${id}/deadline_request/rejected_by_name`]: SESSION.name,
-    [`tickets/${id}/deadline_request/rejected_at`]: NOW(),
-    [`tickets/${id}/deadline_request/reject_note`]: (note || '').trim(),
-    [`tickets/${id}/updated_at`]: NOW()
-  });
-  await logActivity('DEADLINE_CHANGE_REJECTED', id, `Perubahan deadline tiket ${t.ticket_number} ditolak superadmin${note ? `: ${note}` : ''}`);
-  await notify([t.assigned_to, req.requested_by], `Perubahan deadline tiket ${t.ticket_number} ditolak superadmin${note ? `: ${note}` : '.'}`, id);
+  const note = (document.getElementById('drNote').value || '').trim();
+  if (!req) { closeDeadlineReviewModal(); return; }
+  if (!note) { alert('Catatan superadmin wajib diisi.'); return; }
+  const id = DEADLINE_REVIEW_ID;
+  if (DEADLINE_REVIEW_ACTION === 'approve') {
+    await Store.update({
+      [`tickets/${id}/deadline`]: req.requested_deadline,
+      [`tickets/${id}/deadline_request/status`]: 'approved',
+      [`tickets/${id}/deadline_request/approved_by`]: SESSION.user_id,
+      [`tickets/${id}/deadline_request/approved_by_name`]: SESSION.name,
+      [`tickets/${id}/deadline_request/approved_at`]: NOW(),
+      [`tickets/${id}/deadline_request/review_note`]: note,
+      [`tickets/${id}/updated_at`]: NOW()
+    });
+    await logActivity('DEADLINE_CHANGE_APPROVED', id, `Perubahan deadline tiket ${t.ticket_number} disetujui superadmin menjadi ${fmtDate(req.requested_deadline)}. Catatan: ${note}`);
+    await notify([t.division_id, t.assigned_to, req.requested_by], `✓ Perubahan deadline tiket ${t.ticket_number} disetujui menjadi ${fmtDate(req.requested_deadline)}. Catatan: ${note}`, id);
+  } else {
+    await Store.update({
+      [`tickets/${id}/deadline_request/status`]: 'rejected',
+      [`tickets/${id}/deadline_request/rejected_by`]: SESSION.user_id,
+      [`tickets/${id}/deadline_request/rejected_by_name`]: SESSION.name,
+      [`tickets/${id}/deadline_request/rejected_at`]: NOW(),
+      [`tickets/${id}/deadline_request/review_note`]: note,
+      [`tickets/${id}/deadline_request/reject_note`]: note,
+      [`tickets/${id}/updated_at`]: NOW()
+    });
+    await logActivity('DEADLINE_CHANGE_REJECTED', id, `Perubahan deadline tiket ${t.ticket_number} ditolak superadmin. Catatan: ${note}`);
+    await notify([t.assigned_to, req.requested_by], `Perubahan deadline tiket ${t.ticket_number} ditolak superadmin. Catatan: ${note}`, id);
+  }
+  closeDeadlineReviewModal();
   renderNav(); renderPage();
 }
 function rejectTicket(id) {
