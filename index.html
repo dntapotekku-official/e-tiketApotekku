@@ -887,7 +887,7 @@ const SESSION_KEY = 'etiket_session';
 const THEME_KEY = 'etiket_theme';
 
 /* ---- Routing URL: setiap menu punya path sendiri (/dashboard, /tiket, ...) ---- */
-const PAGE_SLUG = { dashboard: 'dashboard', tiket: 'tiket', monitoring: 'monitoring', notif: 'notifikasi', akun: 'akun' };
+const PAGE_SLUG = { dashboard: 'dashboard', tiket: 'tiket', deadline: 'approval-deadline', monitoring: 'monitoring', notif: 'notifikasi', akun: 'akun' };
 const SLUG_PAGE = Object.fromEntries(Object.entries(PAGE_SLUG).map(([k, v]) => [v, k]));
 const BASE = location.pathname.replace(/[^/]*$/, '');
 let PENDING_PAGE = null;
@@ -968,6 +968,9 @@ function isClosed(t) { return ['done', 'rejected', 'cancelled'].includes(t.statu
 function pendingDeadlineRequest(t) {
   const r = t && t.deadline_request;
   return r && r.status === 'pending' && r.requested_deadline ? r : null;
+}
+function pendingDeadlineTickets() {
+  return ticketList().filter(t => pendingDeadlineRequest(t));
 }
 function ticketList() {
   return Object.values(DATA.tickets || {}).filter(t => !t.deleted_at).sort((a, b) => {
@@ -1180,10 +1183,13 @@ function renderRoot() {
 }
 function renderNav() {
   const unread = SESSION.role === 'viewer' ? 0 : unreadCount();
+  const deadlinePending = SESSION.role === 'admin' && isSuper() ? pendingDeadlineTickets().length : 0;
   const notifLabel = `🔔 Notifikasi${unread ? ` <span class="notif-count">${unread}</span>` : ''}`;
+  const deadlineLabel = `🗓 Approval Deadline${deadlinePending ? ` <span class="notif-count">${deadlinePending}</span>` : ''}`;
   const menus = SESSION.role === 'viewer'
     ? [['dashboard', '📡 Dashboard Monitoring'], ['akun', '⚙️ Pengaturan Akun']]
     : [['dashboard', '📊 Dashboard'], ['tiket', '🎫 Tiket'],
+       ...(SESSION.role === 'admin' && isSuper() ? [['deadline', deadlineLabel]] : []),
        ...(SESSION.role === 'admin' && isSuper() ? [['monitoring', '📡 Monitoring']] : []),
        ['notif', notifLabel], ['akun', '⚙️ Pengaturan Akun']];
   document.getElementById('roleChip').textContent =
@@ -1205,6 +1211,7 @@ function renderPage() {
   PAGE_ANIM = false;
   if (ACTIVE_PAGE === 'akun') renderAkun(m);
   else if (ACTIVE_PAGE === 'notif') renderNotif(m);
+  else if (ACTIVE_PAGE === 'deadline' && SESSION.role === 'admin' && isSuper()) renderDeadlineApproval(m);
   else if (ACTIVE_PAGE === 'monitoring' && SESSION.role === 'admin' && isSuper()) renderViewer(m);
   else if (SESSION.role === 'divisi') ACTIVE_PAGE === 'tiket' ? renderDivisiTiket(m) : renderDivisiDash(m);
   else if (SESSION.role === 'admin') ACTIVE_PAGE === 'tiket' ? renderAdminTiket(m) : renderAdminDash(m);
@@ -1708,6 +1715,27 @@ function renderAdminDash(m) {
         <td>${esc(t.system_name)}</td><td>${priorityBadge(t)}</td><td>${fmtTime(t.created_at)}</td>
       </tr>`).join('')}</tbody></table></div>` : '<p class="empty">Belum ada tiket menunggu. Antrean bersih! 🎉</p>'}</div></div>`;
 }
+function renderDeadlineApproval(m) {
+  const list = pendingDeadlineTickets();
+  m.innerHTML = `
+    <div class="page-head"><div><h1>Approval Deadline</h1><p class="sub">Persetujuan perubahan tanggal deadline dari admin/PIC</p></div>
+      <button class="btn btn-ghost btn-sm" onclick="goPage('tiket')">← Kembali ke Tiket</button></div>
+    <div class="panel"><div class="panel-head"><h2>Menunggu Persetujuan</h2><span class="hint">${list.length} pengajuan</span></div>
+      <div class="panel-body">
+        ${list.length ? list.map(t => {
+          const req = pendingDeadlineRequest(t);
+          const extra = `<div class="ticket-actions">
+            <span class="badge b-low">Deadline lama: ${fmtDate(req.previous_deadline)}</span>
+            <span class="badge b-waiting">Deadline baru: ${fmtDate(req.requested_deadline)}</span>
+            <span class="badge b-low">Pengaju: ${esc(req.requested_by_name || '-')}</span>
+            <button class="btn btn-green btn-sm" onclick="approveDeadlineChange('${t.ticket_id}')">✓ Setujui deadline</button>
+            <button class="btn btn-ghost btn-sm" onclick="rejectDeadlineChange('${t.ticket_id}')">Tolak deadline</button>
+            ${commentBlock(t)}
+          </div>`;
+          return ticketCard(t, 'Approval', extra);
+        }).join('') : '<p class="empty">Tidak ada pengajuan perubahan deadline.</p>'}
+      </div></div>`;
+}
 function renderAdminTiket(m) {
   const all = adminVisible(ticketList());
   let list = FILTER_STATUS ? all.filter(t => t.status === FILTER_STATUS) : all;
@@ -1742,10 +1770,6 @@ function renderAdminTiket(m) {
       else if (t.status === 'on_hold') actions = `<button class="btn btn-blue btn-sm" onclick="toggleHold('${t.ticket_id}')">▶ Lanjutkan</button>`;
       if (SESSION.role === 'admin' && t.deadline && !isClosed(t)) {
         actions += ` <button class="btn btn-ghost btn-sm" onclick="editDeadline('${t.ticket_id}')">${deadlineReq ? '✎ Ubah pengajuan' : '✎ Edit deadline'}</button>`;
-      }
-      if (isSuper() && deadlineReq) {
-        actions += ` <button class="btn btn-green btn-sm" onclick="approveDeadlineChange('${t.ticket_id}')">✓ Setujui deadline</button>`;
-        actions += ` <button class="btn btn-ghost btn-sm" onclick="rejectDeadlineChange('${t.ticket_id}')">Tolak deadline</button>`;
       }
       if (SESSION.role === 'admin' && ['in_progress', 'on_hold', 'done'].includes(t.status)) {
         const atFirst = t.status !== 'done' && PROGRESS_STEPS.indexOf(t.current_progress) <= 0;
@@ -1875,6 +1899,7 @@ async function approveDeadlineChange(id) {
   });
   await logActivity('DEADLINE_CHANGE_APPROVED', id, `Perubahan deadline tiket ${t.ticket_number} disetujui superadmin menjadi ${fmtDate(req.requested_deadline)}`);
   await notify([t.division_id, t.assigned_to, req.requested_by], `✓ Perubahan deadline tiket ${t.ticket_number} disetujui menjadi ${fmtDate(req.requested_deadline)}.`, id);
+  renderNav(); renderPage();
 }
 async function rejectDeadlineChange(id) {
   if (!isSuper()) return;
@@ -1893,6 +1918,7 @@ async function rejectDeadlineChange(id) {
   });
   await logActivity('DEADLINE_CHANGE_REJECTED', id, `Perubahan deadline tiket ${t.ticket_number} ditolak superadmin${note ? `: ${note}` : ''}`);
   await notify([t.assigned_to, req.requested_by], `Perubahan deadline tiket ${t.ticket_number} ditolak superadmin${note ? `: ${note}` : '.'}`, id);
+  renderNav(); renderPage();
 }
 function rejectTicket(id) {
   REJECT_ID = id;
