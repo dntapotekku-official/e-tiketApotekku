@@ -990,6 +990,10 @@ function pendingDeadlineRequest(t) {
   const r = t && t.deadline_request;
   return r && r.status === 'pending' && r.requested_deadline ? r : null;
 }
+function rejectedDeadlineRequest(t) {
+  const r = t && t.deadline_request;
+  return r && r.status === 'rejected' && (r.review_note || r.reject_note) ? r : null;
+}
 function pendingDeadlineTickets() {
   return ticketList().filter(t => pendingDeadlineRequest(t));
 }
@@ -1508,6 +1512,7 @@ function ticketCard(t, orderLabel, extra) {
         ${t.status === 'rejected' && t.reject_reason ? `<span>Alasan <b>${esc(t.reject_reason)}</b></span>` : ''}
       </div>
       ${pendingDeadlineRequest(t) && pendingDeadlineRequest(t).reason ? `<div class="note-box" style="margin-top:10px"><span class="note-label">Alasan perubahan deadline</span>${esc(pendingDeadlineRequest(t).reason)}</div>` : ''}
+      ${rejectedDeadlineRequest(t) ? `<div class="note-box" style="margin-top:10px"><span class="note-label">Alasan penolakan deadline</span>${esc(rejectedDeadlineRequest(t).review_note || rejectedDeadlineRequest(t).reject_note)}</div>` : ''}
       ${attachThumbs(t)}
       ${['in_progress', 'on_hold', 'done'].includes(t.status) && t.current_progress ? renderProgressBar(t.current_progress) : ''}
       ${extra || ''}
@@ -1954,7 +1959,7 @@ async function saveDeadlineReview() {
       [`tickets/${id}/updated_at`]: NOW()
     });
     await logActivity('DEADLINE_CHANGE_REJECTED', id, `Perubahan deadline tiket ${t.ticket_number} ditolak superadmin. Catatan: ${note}`);
-    await notify([t.assigned_to, req.requested_by], `Perubahan deadline tiket ${t.ticket_number} ditolak superadmin. Catatan: ${note}`, id);
+    await notify([t.division_id, t.assigned_to, req.requested_by], `Perubahan deadline tiket ${t.ticket_number} ditolak superadmin. Catatan: ${note}`, id);
   }
   closeDeadlineReviewModal();
   renderNav(); renderPage();
