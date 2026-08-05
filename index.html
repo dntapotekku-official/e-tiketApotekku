@@ -42,6 +42,9 @@
   --red-soft: #FCEAEA;
   --violet: #6E56CF;
   --violet-soft: #F1EDFB;
+  --cyan: #0891B2;
+  --teal: #0F766E;
+  --rose: #E11D48;
   --radius: 12px;
   --shadow: 0 1px 2px rgba(19, 26, 38, .05), 0 4px 16px rgba(19, 26, 38, .06);
   --font-display: 'Space Grotesk', sans-serif;
@@ -196,12 +199,18 @@ button { font-family: inherit; cursor: pointer; }
 .stat.accent-green { background: linear-gradient(135deg, rgba(18, 161, 80, .2) 0%, var(--surface) 68%); border-color: rgba(18, 161, 80, .3); }
 .stat.accent-violet { background: linear-gradient(135deg, rgba(110, 86, 207, .22) 0%, var(--surface) 68%); border-color: rgba(110, 86, 207, .32); }
 .stat.accent-red { background: linear-gradient(135deg, rgba(220, 61, 67, .22) 0%, var(--surface) 68%); border-color: rgba(220, 61, 67, .32); }
+.stat.accent-cyan { background: linear-gradient(135deg, rgba(8, 145, 178, .22) 0%, var(--surface) 68%); border-color: rgba(8, 145, 178, .32); }
+.stat.accent-teal { background: linear-gradient(135deg, rgba(15, 118, 110, .24) 0%, var(--surface) 68%); border-color: rgba(15, 118, 110, .34); }
+.stat.accent-rose { background: linear-gradient(135deg, rgba(225, 29, 72, .22) 0%, var(--surface) 68%); border-color: rgba(225, 29, 72, .32); }
 .stat.accent-blue .value { color: var(--brand); }
 .stat.accent-total .value { color: var(--blue); }
 .stat.accent-amber .value { color: var(--amber); }
 .stat.accent-green .value { color: var(--green); }
 .stat.accent-violet .value { color: var(--violet); }
 .stat.accent-red .value { color: var(--red); }
+.stat.accent-cyan .value { color: var(--cyan); }
+.stat.accent-teal .value { color: var(--teal); }
+.stat.accent-rose .value { color: var(--rose); }
 
 /* ---------- Panels & tables ---------- */
 .panel {
@@ -1559,9 +1568,9 @@ function slaCards(list) {
   const doneTimes = list.filter(t => t.status === 'done' && t.accepted_at).map(t => (t.done_at || t.updated_at) - t.accepted_at);
   const overdue = list.filter(isOverdue).length;
   return `
-    <div class="stat ${overdue ? 'accent-red' : ''}"><div class="label">Terlambat</div><div class="value">${overdue}</div><div class="sla-note">deadline lewat, belum selesai</div></div>
-    <div class="stat accent-amber"><div class="label">Rata² Waktu Tunggu</div><div class="value" style="font-size:22px">${fmtDur(avg(waitTimes))}</div><div class="sla-note">tiket masuk → di-accept</div></div>
-    <div class="stat accent-green"><div class="label">Rata² Penyelesaian</div><div class="value" style="font-size:22px">${fmtDur(avg(doneTimes))}</div><div class="sla-note">accept → release</div></div>`;
+    <div class="stat ${overdue ? 'accent-rose' : ''}"><div class="label">Terlambat</div><div class="value">${overdue}</div><div class="sla-note">deadline lewat, belum selesai</div></div>
+    <div class="stat accent-cyan"><div class="label">Rata² Waktu Tunggu</div><div class="value" style="font-size:22px">${fmtDur(avg(waitTimes))}</div><div class="sla-note">tiket masuk → di-accept</div></div>
+    <div class="stat accent-teal"><div class="label">Rata² Penyelesaian</div><div class="value" style="font-size:22px">${fmtDur(avg(doneTimes))}</div><div class="sla-note">accept → release</div></div>`;
 }
 function superDeadlineApprovalCard(list) {
   const total = list.filter(t => {
