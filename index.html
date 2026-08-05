@@ -198,6 +198,7 @@ button { font-family: inherit; cursor: pointer; }
   font-family: var(--font-mono); font-size: 30px; font-weight: 700;
   display: flex; align-items: center; min-width: 0;
 }
+.stat .value .unit { font-size: .68em; margin-left: 6px; }
 .stat.accent-blue { background: linear-gradient(135deg, rgba(225, 0, 15, .18) 0%, var(--surface) 68%); border-color: rgba(225, 0, 15, .28); }
 .stat.accent-total { background: linear-gradient(135deg, rgba(46, 91, 255, .22) 0%, var(--surface) 68%); border-color: rgba(46, 91, 255, .32); }
 .stat.accent-amber { background: linear-gradient(135deg, rgba(232, 147, 12, .2) 0%, var(--surface) 68%); border-color: rgba(232, 147, 12, .3); }
@@ -1012,6 +1013,11 @@ function fmtDur(ms) {
   if (h < 48) return h.toFixed(1) + ' jam';
   return (h / 24).toFixed(1) + ' hari';
 }
+function fmtDurStat(ms) {
+  const out = fmtDur(ms);
+  const parts = out.match(/^([0-9.]+)\s+(.+)$/);
+  return parts ? `${parts[1]} <span class="unit">${esc(parts[2])}</span>` : esc(out);
+}
 function avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null; }
 function badge(cls, label) { return `<span class="badge ${cls}">${esc(label)}</span>`; }
 function statusBadge(t) { return badge(STATUS_BADGE[t.status] || 'b-low', STATUS_LABEL[t.status] || t.status); }
@@ -1579,8 +1585,8 @@ function slaCards(list) {
   const overdue = list.filter(isOverdue).length;
   return `
     <div class="stat ${overdue ? 'accent-rose' : ''}"><div class="label">Terlambat</div><div class="value">${overdue}</div><div class="sla-note">deadline lewat, belum selesai</div></div>
-    <div class="stat accent-cyan"><div class="label">Rata² Waktu Tunggu</div><div class="value">${fmtDur(avg(waitTimes))}</div><div class="sla-note">tiket masuk → di-accept</div></div>
-    <div class="stat accent-teal"><div class="label">Rata² Penyelesaian</div><div class="value">${fmtDur(avg(doneTimes))}</div><div class="sla-note">accept → release</div></div>`;
+    <div class="stat accent-cyan"><div class="label">Rata² Waktu Tunggu</div><div class="value">${fmtDurStat(avg(waitTimes))}</div><div class="sla-note">tiket masuk → di-accept</div></div>
+    <div class="stat accent-teal"><div class="label">Rata² Penyelesaian</div><div class="value">${fmtDurStat(avg(doneTimes))}</div><div class="sla-note">accept → release</div></div>`;
 }
 function superDeadlineApprovalCard(list) {
   const count = status => list.filter(t => {
