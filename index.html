@@ -1593,7 +1593,7 @@ function superDeadlineApprovalCard(list) {
     const req = deadlineRequest(t);
     return req && req.status === status;
   }).length;
-  return `<div class="stat accent-violet"><div class="label">Deadline Disetujui</div><div class="value">${count('approved')}</div><div class="sla-note">Menunggu ${count('pending')} | Ditolak ${count('rejected')}</div></div>`;
+  return `<div class="stat accent-violet"><div class="label">Perubahan Deadline Disetujui</div><div class="value">${count('approved')}</div><div class="sla-note">Menunggu ${count('pending')} | Ditolak ${count('rejected')}</div></div>`;
 }
 
 /* ---- Ekspor Excel (.xlsx via SheetJS; fallback CSV bila library tak termuat) ---- */
