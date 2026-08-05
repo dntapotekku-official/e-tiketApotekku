@@ -1556,9 +1556,11 @@ function slaCards(list) {
     <div class="stat"><div class="label">Rata² Penyelesaian</div><div class="value" style="font-size:22px">${fmtDur(avg(doneTimes))}</div><div class="sla-note">accept → release</div></div>`;
 }
 function superDeadlineApprovalCard(list) {
-  const supers = new Set(superIds());
-  const total = list.filter(t => t.deadline && t.accepted_by && supers.has(t.accepted_by)).length;
-  return `<div class="stat accent-violet"><div class="label">Approval Deadline Superadmin</div><div class="value">${total}</div><div class="sla-note">deadline disetujui oleh superadmin</div></div>`;
+  const total = list.filter(t => {
+    const req = deadlineRequest(t);
+    return req && req.status === 'approved';
+  }).length;
+  return `<div class="stat accent-violet"><div class="label">Approval Deadline Superadmin</div><div class="value">${total}</div><div class="sla-note">pengajuan perubahan deadline disetujui</div></div>`;
 }
 
 /* ---- Ekspor Excel (.xlsx via SheetJS; fallback CSV bila library tak termuat) ---- */
