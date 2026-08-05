@@ -311,6 +311,12 @@ tbody tr:hover { background: #FAFBFD; }
 
 .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .toolbar select { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font: inherit; background: var(--surface); }
+.tabs { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); flex-wrap: wrap; }
+.tab-btn {
+  border: 0; border-radius: 7px; background: transparent; color: var(--ink-2);
+  padding: 7px 11px; font-weight: 600; font-size: 12.5px;
+}
+.tab-btn.active { background: var(--surface); color: var(--brand); box-shadow: var(--shadow); }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 860px) {
@@ -890,6 +896,7 @@ let REJECT_ID = null;
 let ACTIVE_PAGE = 'dashboard';
 let FILTER_STATUS = '';
 let FILTER_ASSIGN = '';
+let DEADLINE_TAB = 'pending';
 let UM_EDIT_ID = '';
 let OPEN_COMMENTS = {};
 let PENDING_ATTACH = [];
@@ -990,12 +997,22 @@ function pendingDeadlineRequest(t) {
   const r = t && t.deadline_request;
   return r && r.status === 'pending' && r.requested_deadline ? r : null;
 }
+function deadlineRequest(t) {
+  const r = t && t.deadline_request;
+  return r && r.requested_deadline ? r : null;
+}
 function rejectedDeadlineRequest(t) {
   const r = t && t.deadline_request;
   return r && r.status === 'rejected' && (r.review_note || r.reject_note) ? r : null;
 }
 function pendingDeadlineTickets() {
   return ticketList().filter(t => pendingDeadlineRequest(t));
+}
+function deadlineRequestTickets(status) {
+  return ticketList().filter(t => {
+    const r = deadlineRequest(t);
+    return r && (!status || r.status === status);
+  });
 }
 function ticketList() {
   return Object.values(DATA.tickets || {}).filter(t => !t.deleted_at).sort((a, b) => {
@@ -1747,24 +1764,40 @@ function renderAdminDash(m) {
       </tr>`).join('')}</tbody></table></div>` : '<p class="empty">Belum ada tiket menunggu. Antrean bersih! 🎉</p>'}</div></div>`;
 }
 function renderDeadlineApproval(m) {
-  const list = pendingDeadlineTickets();
+  const tabs = [
+    { id: 'pending', label: 'Menunggu', title: 'Menunggu Persetujuan', empty: 'Tidak ada pengajuan perubahan deadline yang menunggu.' },
+    { id: 'approved', label: 'Disetujui', title: 'Disetujui', empty: 'Belum ada pengajuan deadline yang disetujui.' },
+    { id: 'rejected', label: 'Tidak Disetujui', title: 'Tidak Disetujui', empty: 'Belum ada pengajuan deadline yang tidak disetujui.' }
+  ];
+  if (!tabs.some(t => t.id === DEADLINE_TAB)) DEADLINE_TAB = 'pending';
+  const current = tabs.find(t => t.id === DEADLINE_TAB);
+  const counts = Object.fromEntries(tabs.map(t => [t.id, deadlineRequestTickets(t.id).length]));
+  const list = deadlineRequestTickets(DEADLINE_TAB);
   m.innerHTML = `
     <div class="page-head"><div><h1>Approval Deadline</h1><p class="sub">Persetujuan perubahan tanggal deadline dari admin/PIC</p></div>
       <button class="btn btn-ghost btn-sm" onclick="goPage('tiket')">← Kembali ke Tiket</button></div>
-    <div class="panel"><div class="panel-head"><h2>Menunggu Persetujuan</h2><span class="hint">${list.length} pengajuan</span></div>
+    <div class="panel"><div class="panel-head"><h2>${current.title}</h2>
+      <div class="tabs">${tabs.map(t => `<button class="tab-btn ${DEADLINE_TAB === t.id ? 'active' : ''}" onclick="DEADLINE_TAB='${t.id}';renderPage()">${t.label} (${counts[t.id]})</button>`).join('')}</div></div>
       <div class="panel-body">
         ${list.length ? list.map(t => {
-          const req = pendingDeadlineRequest(t);
+          const req = deadlineRequest(t);
+          const isPending = req.status === 'pending';
+          const reviewedBy = req.approved_by_name || req.rejected_by_name || '-';
+          const reviewedAt = req.approved_at || req.rejected_at;
+          const reviewNote = req.review_note || req.reject_note || '';
           const extra = `<div class="ticket-actions">
             <span class="badge b-low">Deadline lama: ${fmtDate(req.previous_deadline)}</span>
             <span class="badge b-waiting">Deadline baru: ${fmtDate(req.requested_deadline)}</span>
             <span class="badge b-low">Pengaju: ${esc(req.requested_by_name || '-')}</span>
-            <button class="btn btn-green btn-sm" onclick="openDeadlineReview('${t.ticket_id}', 'approve')">✓ Setujui deadline</button>
-            <button class="btn btn-ghost btn-sm" onclick="openDeadlineReview('${t.ticket_id}', 'reject')">Tolak deadline</button>
+            ${isPending ? `
+              <button class="btn btn-green btn-sm" onclick="openDeadlineReview('${t.ticket_id}', 'approve')">✓ Setujui deadline</button>
+              <button class="btn btn-ghost btn-sm" onclick="openDeadlineReview('${t.ticket_id}', 'reject')">Tolak deadline</button>`
+              : `<span class="badge ${req.status === 'approved' ? 'b-done' : 'b-rejected'}">Direview: ${esc(reviewedBy)}${reviewedAt ? ` · ${fmtTime(reviewedAt)}` : ''}</span>`}
             ${commentBlock(t)}
+            ${req.status === 'approved' && reviewNote ? `<div class="note-box" style="margin-top:10px"><span class="note-label">Catatan superadmin</span>${esc(reviewNote)}</div>` : ''}
           </div>`;
           return ticketCard(t, 'Approval', extra);
-        }).join('') : '<p class="empty">Tidak ada pengajuan perubahan deadline.</p>'}
+        }).join('') : `<p class="empty">${current.empty}</p>`}
       </div></div>`;
 }
 function renderAdminTiket(m) {
