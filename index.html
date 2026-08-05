@@ -191,11 +191,13 @@ button { font-family: inherit; cursor: pointer; }
 .stat .label { font-size: 12px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; }
 .stat .value { font-family: var(--font-mono); font-size: 30px; font-weight: 700; margin-top: 4px; }
 .stat.accent-blue { background: linear-gradient(135deg, rgba(225, 0, 15, .18) 0%, var(--surface) 68%); border-color: rgba(225, 0, 15, .28); }
+.stat.accent-total { background: linear-gradient(135deg, rgba(46, 91, 255, .22) 0%, var(--surface) 68%); border-color: rgba(46, 91, 255, .32); }
 .stat.accent-amber { background: linear-gradient(135deg, rgba(232, 147, 12, .2) 0%, var(--surface) 68%); border-color: rgba(232, 147, 12, .3); }
 .stat.accent-green { background: linear-gradient(135deg, rgba(18, 161, 80, .2) 0%, var(--surface) 68%); border-color: rgba(18, 161, 80, .3); }
 .stat.accent-violet { background: linear-gradient(135deg, rgba(110, 86, 207, .22) 0%, var(--surface) 68%); border-color: rgba(110, 86, 207, .32); }
 .stat.accent-red { background: linear-gradient(135deg, rgba(220, 61, 67, .22) 0%, var(--surface) 68%); border-color: rgba(220, 61, 67, .32); }
 .stat.accent-blue .value { color: var(--brand); }
+.stat.accent-total .value { color: var(--blue); }
 .stat.accent-amber .value { color: var(--amber); }
 .stat.accent-green .value { color: var(--green); }
 .stat.accent-violet .value { color: var(--violet); }
@@ -1545,7 +1547,7 @@ function ticketCard(t, orderLabel, extra) {
 function statGrid(list, extra) {
   const c = s => list.filter(t => t.status === s).length;
   return `<div class="stat-grid">
-    <div class="stat"><div class="label">Total Tiket</div><div class="value">${list.length}</div></div>
+    <div class="stat accent-total"><div class="label">Total Tiket</div><div class="value">${list.length}</div></div>
     <div class="stat accent-amber"><div class="label">Menunggu</div><div class="value">${c('waiting')}</div></div>
     <div class="stat accent-blue"><div class="label">Diproses</div><div class="value">${c('in_progress')}</div></div>
     <div class="stat accent-green"><div class="label">Selesai</div><div class="value">${c('done')}</div></div>
@@ -1558,8 +1560,8 @@ function slaCards(list) {
   const overdue = list.filter(isOverdue).length;
   return `
     <div class="stat ${overdue ? 'accent-red' : ''}"><div class="label">Terlambat</div><div class="value">${overdue}</div><div class="sla-note">deadline lewat, belum selesai</div></div>
-    <div class="stat"><div class="label">Rata² Waktu Tunggu</div><div class="value" style="font-size:22px">${fmtDur(avg(waitTimes))}</div><div class="sla-note">tiket masuk → di-accept</div></div>
-    <div class="stat"><div class="label">Rata² Penyelesaian</div><div class="value" style="font-size:22px">${fmtDur(avg(doneTimes))}</div><div class="sla-note">accept → release</div></div>`;
+    <div class="stat accent-amber"><div class="label">Rata² Waktu Tunggu</div><div class="value" style="font-size:22px">${fmtDur(avg(waitTimes))}</div><div class="sla-note">tiket masuk → di-accept</div></div>
+    <div class="stat accent-green"><div class="label">Rata² Penyelesaian</div><div class="value" style="font-size:22px">${fmtDur(avg(doneTimes))}</div><div class="sla-note">accept → release</div></div>`;
 }
 function superDeadlineApprovalCard(list) {
   const total = list.filter(t => {
