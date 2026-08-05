@@ -190,10 +190,14 @@ button { font-family: inherit; cursor: pointer; }
 .kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .stat {
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 16px 18px; box-shadow: var(--shadow);
+  min-height: 150px; padding: 16px 18px; box-shadow: var(--shadow);
+  display: grid; grid-template-rows: auto 1fr auto;
 }
 .stat .label { font-size: 12px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; }
-.stat .value { font-family: var(--font-mono); font-size: 30px; font-weight: 700; margin-top: 4px; }
+.stat .value {
+  font-family: var(--font-mono); font-size: 30px; font-weight: 700;
+  display: flex; align-items: center; min-width: 0;
+}
 .stat.accent-blue { background: linear-gradient(135deg, rgba(225, 0, 15, .18) 0%, var(--surface) 68%); border-color: rgba(225, 0, 15, .28); }
 .stat.accent-total { background: linear-gradient(135deg, rgba(46, 91, 255, .22) 0%, var(--surface) 68%); border-color: rgba(46, 91, 255, .32); }
 .stat.accent-amber { background: linear-gradient(135deg, rgba(232, 147, 12, .2) 0%, var(--surface) 68%); border-color: rgba(232, 147, 12, .3); }
@@ -1575,8 +1579,8 @@ function slaCards(list) {
   const overdue = list.filter(isOverdue).length;
   return `
     <div class="stat ${overdue ? 'accent-rose' : ''}"><div class="label">Terlambat</div><div class="value">${overdue}</div><div class="sla-note">deadline lewat, belum selesai</div></div>
-    <div class="stat accent-cyan"><div class="label">Rata² Waktu Tunggu</div><div class="value" style="font-size:22px">${fmtDur(avg(waitTimes))}</div><div class="sla-note">tiket masuk → di-accept</div></div>
-    <div class="stat accent-teal"><div class="label">Rata² Penyelesaian</div><div class="value" style="font-size:22px">${fmtDur(avg(doneTimes))}</div><div class="sla-note">accept → release</div></div>`;
+    <div class="stat accent-cyan"><div class="label">Rata² Waktu Tunggu</div><div class="value">${fmtDur(avg(waitTimes))}</div><div class="sla-note">tiket masuk → di-accept</div></div>
+    <div class="stat accent-teal"><div class="label">Rata² Penyelesaian</div><div class="value">${fmtDur(avg(doneTimes))}</div><div class="sla-note">accept → release</div></div>`;
 }
 function superDeadlineApprovalCard(list) {
   const count = status => list.filter(t => {
