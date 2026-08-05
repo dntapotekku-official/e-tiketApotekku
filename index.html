@@ -186,7 +186,8 @@ button { font-family: inherit; cursor: pointer; }
 .page-head .sub { color: var(--ink-3); margin-top: 2px; }
 
 /* ---------- Stat cards ---------- */
-.stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 24px; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-bottom: 24px; }
+.kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .stat {
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 16px 18px; box-shadow: var(--shadow);
@@ -343,7 +344,7 @@ tbody tr:hover { background: #FAFBFD; }
   .role-chip { margin: 0 8px; }
   .nav { flex-direction: row; flex-wrap: wrap; }
   .main { padding: 18px 14px; }
-  .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ticket-card { grid-template-columns: 1fr; }
   .ticket-stub { flex-direction: row; align-items: center; border-right: none; border-bottom: 2px dashed rgba(255,255,255,.35); border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0; }
   .ticket-stub::before { top: auto; bottom: -8px; left: -8px; right: auto; }
@@ -352,7 +353,7 @@ tbody tr:hover { background: #FAFBFD; }
 }
 
 @media (max-width: 520px) {
-  .stat-grid { grid-template-columns: 1fr; }
+  .kpi-grid { grid-template-columns: 1fr; }
 }
 .table-scroll { overflow-x: auto; }
 
@@ -1560,7 +1561,7 @@ function ticketCard(t, orderLabel, extra) {
 }
 function statGrid(list, extra) {
   const c = s => list.filter(t => t.status === s).length;
-  return `<div class="stat-grid">
+  return `<div class="stat-grid kpi-grid">
     <div class="stat accent-total"><div class="label">Total Tiket</div><div class="value">${list.length}</div></div>
     <div class="stat accent-amber"><div class="label">Menunggu</div><div class="value">${c('waiting')}</div></div>
     <div class="stat accent-blue"><div class="label">Diproses</div><div class="value">${c('in_progress')}</div></div>
