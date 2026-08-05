@@ -186,7 +186,7 @@ button { font-family: inherit; cursor: pointer; }
 .page-head .sub { color: var(--ink-3); margin-top: 2px; }
 
 /* ---------- Stat cards ---------- */
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-bottom: 24px; }
+.stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 24px; }
 .stat {
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 16px 18px; box-shadow: var(--shadow);
@@ -343,11 +343,16 @@ tbody tr:hover { background: #FAFBFD; }
   .role-chip { margin: 0 8px; }
   .nav { flex-direction: row; flex-wrap: wrap; }
   .main { padding: 18px 14px; }
+  .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ticket-card { grid-template-columns: 1fr; }
   .ticket-stub { flex-direction: row; align-items: center; border-right: none; border-bottom: 2px dashed rgba(255,255,255,.35); border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0; }
   .ticket-stub::before { top: auto; bottom: -8px; left: -8px; right: auto; }
   .ticket-stub::after { bottom: -8px; right: -8px; }
   .table-scroll { overflow-x: auto; }
+}
+
+@media (max-width: 520px) {
+  .stat-grid { grid-template-columns: 1fr; }
 }
 .table-scroll { overflow-x: auto; }
 
@@ -1577,7 +1582,7 @@ function superDeadlineApprovalCard(list) {
     const req = deadlineRequest(t);
     return req && req.status === status;
   }).length;
-  return `<div class="stat accent-violet"><div class="label">Deadline Disetujui Superadmin</div><div class="value">${count('approved')}</div><div class="sla-note">Menunggu ${count('pending')} | Ditolak ${count('rejected')}</div></div>`;
+  return `<div class="stat accent-violet"><div class="label">Deadline Disetujui</div><div class="value">${count('approved')}</div><div class="sla-note">Menunggu ${count('pending')} | Ditolak ${count('rejected')}</div></div>`;
 }
 
 /* ---- Ekspor Excel (.xlsx via SheetJS; fallback CSV bila library tak termuat) ---- */
